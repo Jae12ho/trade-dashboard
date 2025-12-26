@@ -291,11 +291,74 @@ To add a new indicator, follow this pattern:
 - **No test suite**: Project currently has no automated tests
 - **No deployment config**: Deployment strategy not yet defined
 
+## Multi-Period Change Calculations
+
+**Critical Implementation Detail**: The dashboard displays 1D, 7D, and 30D (or 1M, 2M, 3M for monthly data) change percentages.
+
+### Calculation Functions (lib/api/indicators.ts)
+
+1. **`calculatePeriodChange`** - Entry-based calculation
+   - Used for: 1D changes (last trading day)
+   - Used for: Monthly data (M2, MFG) - 1M/2M/3M periods
+   - Logic: `history[length - 1 - periodsAgo]` (index-based)
+
+2. **`calculateCalendarDayChange`** - Calendar-based calculation
+   - Used for: 7D and 30D changes for daily trading data
+   - Logic: Finds data point closest to exact calendar date N days ago
+   - Handles weekends/holidays by finding nearest trading day (±3 day tolerance)
+
+### Data Frequency Handling
+
+| Indicator | Data Frequency | Periods | Chart Display |
+|-----------|----------------|---------|---------------|
+| US10Y, HYS | Daily (trading days) | 1D, 7D, 30D | Last 30 calendar days |
+| DXY, OIL, Cu/Au, VIX | Daily (trading days) | 1D, 7D, 30D | Last 30 calendar days |
+| BTC | Daily (all days) | 1D, 7D, 30D | Last 30 calendar days |
+| M2 | Monthly | 1M, 2M, 3M | Last 12 months |
+| MFG | Monthly | 1M, 2M, 3M | Last 12 months |
+
+### Chart Filtering (components/IndicatorCard.tsx)
+
+The `getFilteredHistory` function ensures chart data matches the period labels:
+- **Daily indicators**: Filters by calendar date (last 30 days)
+- **Monthly indicators**: Uses `.slice(-12)` for last 12 entries
+
+**Important**: Chart color is determined by 30D (or 3M) change direction, ensuring visual consistency with the displayed trend.
+
+## Gemini API Caching
+
+**Cache Implementation** (lib/cache/gemini-cache.ts):
+- **Type**: In-memory Map (volatile, non-persistent)
+- **TTL**: 30 minutes
+- **Key**: Hash of rounded indicator values (to improve cache hit rate for similar data)
+- **Behavior**:
+  - Cache clears on server restart/hot reload
+  - First request after restart always calls Gemini API
+  - Automatic cleanup of expired entries
+
+**Error Handling**:
+- API quota/rate limit errors detected by keywords: `quota`, `rate limit`, `429`, `resource exhausted`
+- Returns HTTP 429 with Korean message: "API 사용 한도가 초과되었습니다."
+- UI displays specific quota exceeded message vs generic errors
+
+## Data Collection Limits
+
+To ensure accurate multi-period calculations, APIs fetch more data than displayed:
+
+| API | Parameter | Data Points | Reason |
+|-----|-----------|-------------|--------|
+| FRED | `limit=40` | 40 trading days | Need 31+ for 30D calculation |
+| Yahoo Finance | `range=3mo` | ~60-90 days | Trading days only, need buffer |
+| CoinGecko | `days=40` | 40 days | All days, need buffer for 30D |
+| M2 (FRED) | `limit=40` | 40 months | Monthly data, need 4+ for 3M |
+| MFG (FRED) | `limit=60` | 60 months | Monthly data, extended history |
+
 ## Development History
 
 See `/ai/PLAN.md` for detailed development plans:
 - Phase 7: Added M2 Money Supply, Crude Oil, Copper/Gold Ratio, PMI, VIX
 - Phase 8: Added Bitcoin (BTC/USD) via CoinGecko API
+- Phase 9: Multi-period change percentages (1D/7D/30D) with calendar-based calculation
 
 ## Quirks & Known Issues
 
@@ -304,3 +367,5 @@ See `/ai/PLAN.md` for detailed development plans:
 3. **PMI data**: Uses OECD Manufacturing Confidence instead of ISM PMI (DBnomics data was corrupted)
 4. **Put/Call Ratio**: VIX used as proxy (CBOE data requires paid subscription)
 5. **Copper/Gold display**: Multiplied by 100 for readability (0.124 instead of 0.001238)
+6. **Negative value percentages**: M2 and MFG can have negative base values; `Math.abs(pastValue)` used in denominator to ensure correct sign
+7. **Cache persistence**: Gemini cache is in-memory only; all predictions cleared on server restart
