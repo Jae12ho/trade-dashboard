@@ -16,7 +16,14 @@ export default function AIPrediction() {
       const response = await fetch('/api/ai-prediction');
 
       if (!response.ok) {
-        throw new Error('Failed to fetch AI prediction');
+        const errorData = await response.json();
+
+        // Check if it's a quota error
+        if (errorData.isQuotaError || response.status === 429) {
+          throw new Error(errorData.message || 'API 사용 한도가 초과되었습니다.');
+        }
+
+        throw new Error(errorData.message || 'Failed to fetch AI prediction');
       }
 
       const data: MarketPrediction = await response.json();

@@ -97,6 +97,21 @@ Respond ONLY with the JSON object, no additional text.`;
     };
   } catch (error) {
     console.error('Error generating market prediction:', error);
+
+    // Check if it's a rate limit or quota exceeded error
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+
+      if (errorMessage.includes('quota') ||
+          errorMessage.includes('rate limit') ||
+          errorMessage.includes('429') ||
+          errorMessage.includes('resource exhausted')) {
+        const quotaError = new Error('API 사용 한도가 초과되었습니다. 잠시 후 다시 시도해주세요.');
+        (quotaError as any).isQuotaError = true;
+        throw quotaError;
+      }
+    }
+
     throw error;
   }
 }

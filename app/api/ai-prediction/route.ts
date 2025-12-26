@@ -33,12 +33,17 @@ export async function GET() {
   } catch (error) {
     console.error('Error generating AI prediction:', error);
 
+    // Check if it's a quota/rate limit error
+    const isQuotaError = error instanceof Error && (error as any).isQuotaError === true;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
     return NextResponse.json(
       {
-        error: 'Failed to generate market prediction',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        error: isQuotaError ? 'quota_exceeded' : 'prediction_failed',
+        message: errorMessage,
+        isQuotaError,
       },
-      { status: 500 }
+      { status: isQuotaError ? 429 : 500 }
     );
   }
 }
