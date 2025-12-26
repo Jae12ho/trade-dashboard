@@ -37,6 +37,20 @@ export async function GET() {
     const isQuotaError = error instanceof Error && (error as any).isQuotaError === true;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
+    // If quota error, try to use fallback cache
+    if (isQuotaError) {
+      const fallbackPrediction = geminiCache.getLatestValidPrediction();
+      if (fallbackPrediction) {
+        console.log('[API] Using fallback prediction due to quota error');
+        return NextResponse.json({
+          ...fallbackPrediction,
+          isFallback: true,
+          fallbackMessage: 'API 사용 한도가 초과되었습니다. 최근 분석을 표시합니다.',
+        });
+      }
+      console.log('[API] No fallback available, returning quota error');
+    }
+
     return NextResponse.json(
       {
         error: isQuotaError ? 'quota_exceeded' : 'prediction_failed',

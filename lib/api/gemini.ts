@@ -8,6 +8,8 @@ export interface MarketPrediction {
   reasoning: string;
   risks: string[];
   timestamp: string;
+  isFallback?: boolean;
+  fallbackMessage?: string;
 }
 
 export async function generateMarketPrediction(

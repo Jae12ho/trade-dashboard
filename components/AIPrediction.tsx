@@ -130,6 +130,17 @@ export default function AIPrediction() {
       </div>
 
       <div className="space-y-4">
+        {prediction.isFallback && (
+          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <div className="flex items-start gap-2">
+              <span className="text-yellow-600 dark:text-yellow-400 text-lg">⚠️</span>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 leading-relaxed">
+                {prediction.fallbackMessage}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <span className="text-2xl">{getSentimentIcon(prediction.sentiment)}</span>
           <div>
@@ -177,6 +188,9 @@ export default function AIPrediction() {
         <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
           <p className="text-xs text-zinc-400 dark:text-zinc-400">
             Generated: {new Date(prediction.timestamp).toLocaleString()}
+            {prediction.isFallback && (
+              <span className="ml-1 text-yellow-600 dark:text-yellow-400">(과거 분석)</span>
+            )}
           </p>
         </div>
       </div>

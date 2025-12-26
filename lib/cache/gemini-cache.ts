@@ -118,6 +118,38 @@ class GeminiCache {
   }
 
   /**
+   * 가장 최근의 유효한 예측 가져오기 (fallback용)
+   * API 에러 발생 시 사용
+   * @returns 가장 최근 유효한 예측 또는 null
+   */
+  getLatestValidPrediction(): MarketPrediction | null {
+    const now = Date.now();
+    let latestPrediction: CachedPrediction | null = null;
+    let latestTimestamp = 0;
+
+    for (const [_hash, cached] of this.cache.entries()) {
+      // TTL 이내의 유효한 캐시만 확인
+      if (now - cached.timestamp <= this.ttl) {
+        if (cached.timestamp > latestTimestamp) {
+          latestTimestamp = cached.timestamp;
+          latestPrediction = cached;
+        }
+      }
+    }
+
+    if (latestPrediction) {
+      const ageSeconds = Math.round((now - latestPrediction.timestamp) / 1000);
+      console.log(
+        `[GeminiCache] Fallback prediction found: ${latestPrediction.dataHash} (age: ${ageSeconds}s)`
+      );
+      return latestPrediction.prediction;
+    }
+
+    console.log('[GeminiCache] No valid fallback prediction available');
+    return null;
+  }
+
+  /**
    * 캐시 전체 삭제
    */
   clear(): void {
