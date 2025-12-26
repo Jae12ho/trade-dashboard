@@ -170,24 +170,24 @@ npm run lint
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  클라이언트 (브라우저)                                    │
-│  Dashboard 컴포넌트                                      │
-│  ├─ /api/indicators 호출 (5분마다)                       │
-│  └─ /api/ai-prediction 호출                             │
+│  클라이언트 (브라우저)                                       │
+│  Dashboard 컴포넌트                                       │
+│  ├─ /api/indicators 호출 (5분마다)                         │
+│  └─ /api/ai-prediction 호출                              │
 └─────────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────┐
-│  Next.js API Routes (서버)                              │
-│  ├─ getAllIndicators() - 9개 지표 병렬 조회             │
-│  └─ generateMarketPrediction() - AI 분석 생성           │
+│  Next.js API Routes (서버)                               │
+│  ├─ getAllIndicators() - 9개 지표 병렬 조회                 │
+│  └─ generateMarketPrediction() - AI 분석 생성             │
 └─────────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────┐
 │  외부 API                                                │
-│  ├─ FRED API (매크로 지표)                              │
-│  ├─ Yahoo Finance API (자산 가격)                       │
-│  ├─ CoinGecko API (암호화폐)                            │
-│  └─ Google Gemini API (AI 분석)                         │
+│  ├─ FRED API (매크로 지표)                                 │
+│  ├─ Yahoo Finance API (자산 가격)                         │
+│  ├─ CoinGecko API (암호화폐)                              │
+│  └─ Google Gemini API (AI 분석)                          │
 └─────────────────────────────────────────────────────────┘
 ```
 

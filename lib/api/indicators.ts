@@ -4,25 +4,30 @@ const FRED_API_KEY = process.env.FRED_API_KEY;
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
 /**
- * Calculate change and change percentage for a given period
+ * Calculate change and change percentage for a given period (entry-based)
+ * Used for: 1D changes and monthly data (M2, MFG)
  * @param current - Current value
  * @param history - Historical data points (sorted chronologically, oldest first)
- * @param daysAgo - Number of days to look back
+ * @param periodsAgo - Number of entries to look back
  * @returns Object with change and changePercent, or undefined if data unavailable
  */
 function calculatePeriodChange(
   current: number,
   history: HistoricalDataPoint[],
-  daysAgo: number
+  periodsAgo: number
 ): { change: number | undefined; changePercent: number | undefined } {
   // Data validation
   if (!history || history.length === 0) {
     return { change: undefined, changePercent: undefined };
   }
 
-  // Find the closest data point to daysAgo
-  // history is sorted chronologically (oldest first)
-  const targetIndex = Math.max(0, history.length - 1 - daysAgo);
+  // Check if we have enough data for the requested period
+  if (history.length <= periodsAgo) {
+    return { change: undefined, changePercent: undefined };
+  }
+
+  // Find the data point from periodsAgo entries back
+  const targetIndex = history.length - 1 - periodsAgo;
   const pastDataPoint = history[targetIndex];
 
   if (!pastDataPoint || pastDataPoint.value === undefined) {
@@ -31,12 +36,65 @@ function calculatePeriodChange(
 
   const pastValue = pastDataPoint.value;
   const change = current - pastValue;
-  const changePercent = (change / pastValue) * 100;
+  // Use absolute value of pastValue to ensure changePercent has correct sign
+  // when dealing with negative values (e.g., Manufacturing Confidence)
+  const changePercent = (change / Math.abs(pastValue)) * 100;
 
   return { change, changePercent };
 }
 
-async function fetchFREDData(seriesId: string, limit: number = 30): Promise<{ current: number; previous: number; history: HistoricalDataPoint[] }> {
+/**
+ * Calculate change and change percentage based on calendar days
+ * Used for: 7D and 30D changes for daily trading data
+ * @param current - Current value
+ * @param history - Historical data points (sorted chronologically, oldest first)
+ * @param calendarDays - Number of calendar days to look back
+ * @returns Object with change and changePercent, or undefined if data unavailable
+ */
+function calculateCalendarDayChange(
+  current: number,
+  history: HistoricalDataPoint[],
+  calendarDays: number
+): { change: number | undefined; changePercent: number | undefined } {
+  // Data validation
+  if (!history || history.length === 0) {
+    return { change: undefined, changePercent: undefined };
+  }
+
+  // Calculate the target date (calendarDays ago)
+  const lastDate = new Date(history[history.length - 1].date);
+  const targetDate = new Date(lastDate);
+  targetDate.setDate(targetDate.getDate() - calendarDays);
+
+  // Find the closest data point to the target date
+  // Prefer the data point on or before the target date
+  let closestPoint: HistoricalDataPoint | null = null;
+  let minDiff = Infinity;
+
+  for (const point of history) {
+    const pointDate = new Date(point.date);
+    const diff = lastDate.getTime() - pointDate.getTime();
+    const diffDays = diff / (1000 * 60 * 60 * 24);
+
+    // Look for data point around the target (within ±3 days)
+    if (Math.abs(diffDays - calendarDays) < Math.abs(minDiff - calendarDays)) {
+      closestPoint = point;
+      minDiff = diffDays;
+    }
+  }
+
+  if (!closestPoint || closestPoint.value === undefined) {
+    return { change: undefined, changePercent: undefined };
+  }
+
+  const pastValue = closestPoint.value;
+  const change = current - pastValue;
+  const changePercent = (change / Math.abs(pastValue)) * 100;
+
+  return { change, changePercent };
+}
+
+async function fetchFREDData(seriesId: string, limit: number = 40): Promise<{ current: number; previous: number; history: HistoricalDataPoint[] }> {
   const url = new URL(FRED_BASE_URL);
   url.searchParams.append('series_id', seriesId);
   url.searchParams.append('api_key', FRED_API_KEY || '');
@@ -71,7 +129,7 @@ async function fetchFREDData(seriesId: string, limit: number = 30): Promise<{ cu
 }
 
 async function fetchYahooFinanceData(symbol: string): Promise<{ current: number; previous: number; history: HistoricalDataPoint[] }> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1mo&interval=1d`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
 
   const response = await fetch(url, { next: { revalidate: 300 } });
 
@@ -110,24 +168,25 @@ async function fetchYahooFinanceData(symbol: string): Promise<{ current: number;
 
 export async function getUS10YYield(): Promise<IndicatorData> {
   try {
-    const { current, previous, history } = await fetchFREDData('DGS10');
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
+    const { current, history } = await fetchFREDData('DGS10');
 
-    // 7-day change
+    // 1-day change (entry-based: last trading day)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 7-day change (calendar-based: 7 calendar days ago)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculateCalendarDayChange(current, history, 7);
 
-    // 30-day change
+    // 30-day change (calendar-based: 30 calendar days ago)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculateCalendarDayChange(current, history, 30);
 
     return {
       name: 'US 10Y Yield',
       symbol: 'US10Y',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -144,24 +203,25 @@ export async function getUS10YYield(): Promise<IndicatorData> {
 
 export async function getDXY(): Promise<IndicatorData> {
   try {
-    const { current, previous, history } = await fetchYahooFinanceData('DX-Y.NYB');
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
+    const { current, history } = await fetchYahooFinanceData('DX-Y.NYB');
 
-    // 7-day change
+    // 1-day change (entry-based: last trading day)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 7-day change (calendar-based: 7 calendar days ago)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculateCalendarDayChange(current, history, 7);
 
-    // 30-day change
+    // 30-day change (calendar-based: 30 calendar days ago)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculateCalendarDayChange(current, history, 30);
 
     return {
       name: 'US Dollar Index',
       symbol: 'DXY',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -177,24 +237,25 @@ export async function getDXY(): Promise<IndicatorData> {
 
 export async function getHighYieldSpread(): Promise<IndicatorData> {
   try {
-    const { current, previous, history } = await fetchFREDData('BAMLH0A0HYM2');
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
+    const { current, history } = await fetchFREDData('BAMLH0A0HYM2');
 
-    // 7-day change
+    // 1-day change (entry-based: last trading day)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 7-day change (calendar-based: 7 calendar days ago)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculateCalendarDayChange(current, history, 7);
 
-    // 30-day change
+    // 30-day change (calendar-based: 30 calendar days ago)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculateCalendarDayChange(current, history, 30);
 
     return {
       name: 'High Yield Spread',
       symbol: 'HYS',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -211,24 +272,28 @@ export async function getHighYieldSpread(): Promise<IndicatorData> {
 
 export async function getM2MoneySupply(): Promise<IndicatorData> {
   try {
-    const { current, previous, history } = await fetchFREDData('M2SL', 30);
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
+    // Note: M2SL is monthly data, published on the 1st of each month
+    // So we use 1M, 2M, 3M periods instead of 1D, 7D, 30D
+    const { current, history } = await fetchFREDData('M2SL', 40);
 
-    // 7-day change
+    // Use calculatePeriodChange for all periods for consistency
+    // 1-month change (use as "1D" field for consistency)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 2-month change (use as "7D" field)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculatePeriodChange(current, history, 2);
 
-    // 30-day change
+    // 3-month change (use as "30D" field)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculatePeriodChange(current, history, 3);
 
     return {
       name: 'M2 Money Supply',
       symbol: 'M2',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -246,23 +311,24 @@ export async function getM2MoneySupply(): Promise<IndicatorData> {
 export async function getCrudeOil(): Promise<IndicatorData> {
   try {
     const { current, previous, history } = await fetchYahooFinanceData('CL=F');
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
 
-    // 7-day change
+    // 1-day change (entry-based: last trading day)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 7-day change (calendar-based: 7 calendar days ago)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculateCalendarDayChange(current, history, 7);
 
-    // 30-day change
+    // 30-day change (calendar-based: 30 calendar days ago)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculateCalendarDayChange(current, history, 30);
 
     return {
       name: 'Crude Oil (WTI)',
       symbol: 'OIL',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -288,12 +354,7 @@ export async function getCopperGoldRatio(): Promise<IndicatorData> {
     // Calculate current ratio (multiply by 100 for readability)
     // Standard practice: (Copper price / Gold price) × 100
     const currentRatio = copper.current / gold.current;
-    const previousRatio = copper.previous / gold.previous;
-
     const current = currentRatio * 100;
-    const previous = previousRatio * 100;
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
 
     // Calculate historical ratio by matching dates
     const history: HistoricalDataPoint[] = [];
@@ -310,20 +371,23 @@ export async function getCopperGoldRatio(): Promise<IndicatorData> {
       }
     }
 
-    // 7-day change
-    const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+    // 1-day change (entry-based: last trading day)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
 
-    // 30-day change
+    // 7-day change (calendar-based: 7 calendar days ago)
+    const { change: change7d, changePercent: changePercent7d } =
+      calculateCalendarDayChange(current, history, 7);
+
+    // 30-day change (calendar-based: 30 calendar days ago)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculateCalendarDayChange(current, history, 30);
 
     return {
       name: 'Copper/Gold Ratio',
       symbol: 'Cu/Au',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -362,8 +426,8 @@ async function fetchCoinGeckoPrice(): Promise<{
   // Calculate previous price from 24h change
   const previous = current / (1 + changePercent / 100);
 
-  // Fetch 30-day historical data
-  const chartUrl = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30&interval=daily';
+  // Fetch 40-day historical data (need buffer for 30-day calculation)
+  const chartUrl = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=40&interval=daily';
 
   const chartResponse = await fetch(chartUrl, {
     next: { revalidate: 3600 }, // Cache for 1 hour
@@ -386,24 +450,25 @@ async function fetchCoinGeckoPrice(): Promise<{
 
 export async function getBitcoin(): Promise<IndicatorData> {
   try {
-    const { current, previous, history } = await fetchCoinGeckoPrice();
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
+    const { current, history } = await fetchCoinGeckoPrice();
 
-    // 7-day change
+    // 1-day change (entry-based: yesterday)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 7-day change (calendar-based: 7 calendar days ago)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculateCalendarDayChange(current, history, 7);
 
-    // 30-day change
+    // 30-day change (calendar-based: 30 calendar days ago)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculateCalendarDayChange(current, history, 30);
 
     return {
       name: 'Bitcoin (BTC/USD)',
       symbol: 'BTC',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -423,24 +488,26 @@ export async function getPMI(): Promise<IndicatorData> {
     // Note: Using OECD Business Confidence Indicator as ISM PMI alternative
     // ISM PMI removed from FRED in 2016, DBnomics has corrupted data (showing 10 vs actual ~48)
     // BSCICP02USM460S is OECD Manufacturing Confidence Indicator for US
-    const { current, previous, history } = await fetchFREDData('BSCICP02USM460S', 30);
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
+    // This is monthly data, so we use 1M, 2M, 3M periods instead of 1D, 7D, 30D
+    const { current, previous, history } = await fetchFREDData('BSCICP02USM460S', 60);
 
-    // 7-day change
+    // 1-month change (use as "1D" field for consistency)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 2-month change (use as "7D" field)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculatePeriodChange(current, history, 2);
 
-    // 30-day change
+    // 3-month change (use as "30D" field)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculatePeriodChange(current, history, 3);
 
     return {
       name: 'Manufacturing Confidence (OECD)',
       symbol: 'MFG',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
@@ -462,23 +529,24 @@ export async function getPutCallRatio(): Promise<IndicatorData> {
     // VIX (fear index) serves as good sentiment indicator alternative
     // High VIX (~30+) = high fear/put buying, Low VIX (~15-) = low fear/call buying
     const { current, previous, history } = await fetchYahooFinanceData('^VIX');
-    const change = current - previous;
-    const changePercent = (change / previous) * 100;
 
-    // 7-day change
+    // 1-day change (entry-based: last trading day)
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+
+    // 7-day change (calendar-based: 7 calendar days ago)
     const { change: change7d, changePercent: changePercent7d } =
-      calculatePeriodChange(current, history, 7);
+      calculateCalendarDayChange(current, history, 7);
 
-    // 30-day change
+    // 30-day change (calendar-based: 30 calendar days ago)
     const { change: change30d, changePercent: changePercent30d } =
-      calculatePeriodChange(current, history, 30);
+      calculateCalendarDayChange(current, history, 30);
 
     return {
       name: 'VIX (Market Fear Index)',
       symbol: 'VIX',
       value: current,
-      change,
-      changePercent,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
       change7d,
       changePercent7d,
       change30d,
