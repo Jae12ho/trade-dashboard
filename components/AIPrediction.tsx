@@ -35,13 +35,13 @@ export default function AIPrediction() {
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
       case 'bullish':
-        return 'text-green-600 bg-green-50 dark:bg-green-900/20';
+        return 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/60';
       case 'bearish':
-        return 'text-red-600 bg-red-50 dark:bg-red-900/20';
+        return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/60';
       case 'neutral':
-        return 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20';
+        return 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/60';
       default:
-        return 'text-zinc-600 bg-zinc-50 dark:bg-zinc-900/20';
+        return 'text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/60';
     }
   };
 
@@ -70,7 +70,7 @@ export default function AIPrediction() {
         <div className="flex items-center justify-center py-8">
           <div className="flex flex-col items-center gap-4">
             <div className="w-8 h-8 border-4 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-zinc-50 rounded-full animate-spin"></div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="text-sm text-zinc-500 dark:text-zinc-300">
               Analyzing market conditions...
             </p>
           </div>
@@ -90,7 +90,7 @@ export default function AIPrediction() {
         </div>
         <div className="text-center py-4">
           <div className="text-red-500 text-3xl mb-2">⚠️</div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+          <p className="text-sm text-zinc-500 dark:text-zinc-300 mb-4">
             {error || 'Failed to generate prediction'}
           </p>
           <button
@@ -126,7 +126,7 @@ export default function AIPrediction() {
         <div className="flex items-center gap-3">
           <span className="text-2xl">{getSentimentIcon(prediction.sentiment)}</span>
           <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">
+            <p className="text-xs text-zinc-500 dark:text-zinc-300 mb-1">
               Market Sentiment
             </p>
             <span
@@ -140,24 +140,24 @@ export default function AIPrediction() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-2">
             Analysis
           </h3>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+          <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
             {prediction.reasoning}
           </p>
         </div>
 
         {prediction.risks && prediction.risks.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-2">
               Key Risks to Watch
             </h3>
             <ul className="space-y-2">
               {prediction.risks.map((risk, index) => (
                 <li
                   key={index}
-                  className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+                  className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300"
                 >
                   <span className="text-red-500 mt-0.5">⚠️</span>
                   <span>{risk}</span>
@@ -168,7 +168,7 @@ export default function AIPrediction() {
         )}
 
         <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
-          <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          <p className="text-xs text-zinc-400 dark:text-zinc-400">
             Generated: {new Date(prediction.timestamp).toLocaleString()}
           </p>
         </div>
