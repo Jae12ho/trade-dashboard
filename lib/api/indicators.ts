@@ -3,6 +3,39 @@ import { IndicatorData, FREDResponse, YahooFinanceQuote, HistoricalDataPoint, Co
 const FRED_API_KEY = process.env.FRED_API_KEY;
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
+/**
+ * Calculate change and change percentage for a given period
+ * @param current - Current value
+ * @param history - Historical data points (sorted chronologically, oldest first)
+ * @param daysAgo - Number of days to look back
+ * @returns Object with change and changePercent, or undefined if data unavailable
+ */
+function calculatePeriodChange(
+  current: number,
+  history: HistoricalDataPoint[],
+  daysAgo: number
+): { change: number | undefined; changePercent: number | undefined } {
+  // Data validation
+  if (!history || history.length === 0) {
+    return { change: undefined, changePercent: undefined };
+  }
+
+  // Find the closest data point to daysAgo
+  // history is sorted chronologically (oldest first)
+  const targetIndex = Math.max(0, history.length - 1 - daysAgo);
+  const pastDataPoint = history[targetIndex];
+
+  if (!pastDataPoint || pastDataPoint.value === undefined) {
+    return { change: undefined, changePercent: undefined };
+  }
+
+  const pastValue = pastDataPoint.value;
+  const change = current - pastValue;
+  const changePercent = (change / pastValue) * 100;
+
+  return { change, changePercent };
+}
+
 async function fetchFREDData(seriesId: string, limit: number = 30): Promise<{ current: number; previous: number; history: HistoricalDataPoint[] }> {
   const url = new URL(FRED_BASE_URL);
   url.searchParams.append('series_id', seriesId);
@@ -81,12 +114,24 @@ export async function getUS10YYield(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'US 10Y Yield',
       symbol: 'US10Y',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       unit: '%',
       history,
@@ -103,12 +148,24 @@ export async function getDXY(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'US Dollar Index',
       symbol: 'DXY',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       history,
     };
@@ -124,12 +181,24 @@ export async function getHighYieldSpread(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'High Yield Spread',
       symbol: 'HYS',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       unit: 'bps',
       history,
@@ -146,12 +215,24 @@ export async function getM2MoneySupply(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'M2 Money Supply',
       symbol: 'M2',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       unit: 'Billion $',
       history,
@@ -168,12 +249,24 @@ export async function getCrudeOil(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'Crude Oil (WTI)',
       symbol: 'OIL',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       unit: '$/barrel',
       history,
@@ -217,12 +310,24 @@ export async function getCopperGoldRatio(): Promise<IndicatorData> {
       }
     }
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'Copper/Gold Ratio',
       symbol: 'Cu/Au',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       unit: '×100',
       history,
@@ -285,12 +390,24 @@ export async function getBitcoin(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'Bitcoin (BTC/USD)',
       symbol: 'BTC',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       unit: '$',
       history,
@@ -310,12 +427,24 @@ export async function getPMI(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'Manufacturing Confidence (OECD)',
       symbol: 'MFG',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       history,
     };
@@ -336,12 +465,24 @@ export async function getPutCallRatio(): Promise<IndicatorData> {
     const change = current - previous;
     const changePercent = (change / previous) * 100;
 
+    // 7-day change
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 7);
+
+    // 30-day change
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 30);
+
     return {
       name: 'VIX (Market Fear Index)',
       symbol: 'VIX',
       value: current,
       change,
       changePercent,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
       lastUpdated: new Date().toISOString(),
       history,
     };

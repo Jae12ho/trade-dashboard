@@ -6,10 +6,13 @@ interface IndicatorCardProps {
 }
 
 export default function IndicatorCard({ indicator }: IndicatorCardProps) {
-  const isPositive = indicator.change >= 0;
-  const changeColor = isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-  const bgColor = isPositive ? 'bg-green-50 dark:bg-green-900/60' : 'bg-red-50 dark:bg-red-900/60';
-  const arrow = isPositive ? '↑' : '↓';
+  const getChangeColor = (change: number) => {
+    return change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+  };
+
+  const getBgColor = (change: number) => {
+    return change >= 0 ? 'bg-green-50 dark:bg-green-900/60' : 'bg-red-50 dark:bg-red-900/60';
+  };
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -23,11 +26,6 @@ export default function IndicatorCard({ indicator }: IndicatorCardProps) {
               {indicator.symbol}
             </p>
           </div>
-          <div className={`${bgColor} px-2 py-1 rounded`}>
-            <span className={`text-xs font-semibold ${changeColor}`}>
-              {arrow} {Math.abs(indicator.changePercent).toFixed(2)}%
-            </span>
-          </div>
         </div>
 
         <div>
@@ -39,11 +37,61 @@ export default function IndicatorCard({ indicator }: IndicatorCardProps) {
               </span>
             )}
           </p>
-          <p className={`text-sm font-medium ${changeColor} mt-1`}>
-            {isPositive ? '+' : ''}
-            {indicator.change.toFixed(2)}
-            {indicator.unit && ` ${indicator.unit}`}
-          </p>
+        </div>
+
+        {/* Period changes: 1D, 7D, 30D */}
+        <div className="space-y-2">
+          {/* 1-day change */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">1D</span>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded ${getBgColor(indicator.change)}`}>
+              <span className={`text-xs font-semibold ${getChangeColor(indicator.change)}`}>
+                {indicator.change >= 0 ? '↑' : '↓'}
+              </span>
+              <span className={`text-xs font-semibold ${getChangeColor(indicator.change)}`}>
+                {indicator.change >= 0 ? '+' : ''}{indicator.change.toFixed(2)}
+              </span>
+              <span className={`text-xs font-semibold ${getChangeColor(indicator.change)}`}>
+                ({indicator.change >= 0 ? '+' : ''}{indicator.changePercent.toFixed(2)}%)
+              </span>
+            </div>
+          </div>
+
+          {/* 7-day change */}
+          {indicator.changePercent7d !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">7D</span>
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded ${getBgColor(indicator.change7d!)}`}>
+                <span className={`text-xs font-semibold ${getChangeColor(indicator.change7d!)}`}>
+                  {indicator.change7d! >= 0 ? '↑' : '↓'}
+                </span>
+                <span className={`text-xs font-semibold ${getChangeColor(indicator.change7d!)}`}>
+                  {indicator.change7d! >= 0 ? '+' : ''}{indicator.change7d!.toFixed(2)}
+                </span>
+                <span className={`text-xs font-semibold ${getChangeColor(indicator.change7d!)}`}>
+                  ({indicator.change7d! >= 0 ? '+' : ''}{indicator.changePercent7d!.toFixed(2)}%)
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* 30-day change */}
+          {indicator.changePercent30d !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">30D</span>
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded ${getBgColor(indicator.change30d!)}`}>
+                <span className={`text-xs font-semibold ${getChangeColor(indicator.change30d!)}`}>
+                  {indicator.change30d! >= 0 ? '↑' : '↓'}
+                </span>
+                <span className={`text-xs font-semibold ${getChangeColor(indicator.change30d!)}`}>
+                  {indicator.change30d! >= 0 ? '+' : ''}{indicator.change30d!.toFixed(2)}
+                </span>
+                <span className={`text-xs font-semibold ${getChangeColor(indicator.change30d!)}`}>
+                  ({indicator.change30d! >= 0 ? '+' : ''}{indicator.changePercent30d!.toFixed(2)}%)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {indicator.history && indicator.history.length > 0 && (
@@ -51,7 +99,7 @@ export default function IndicatorCard({ indicator }: IndicatorCardProps) {
             <p className="text-xs text-zinc-400 dark:text-zinc-400 mb-2">
               Last 30 days
             </p>
-            <MiniChart data={indicator.history} isPositive={isPositive} />
+            <MiniChart data={indicator.history} isPositive={indicator.change >= 0} />
           </div>
         )}
 

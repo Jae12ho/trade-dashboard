@@ -7,8 +7,19 @@ export interface IndicatorData {
   name: string;
   symbol: string;
   value: number;
+
+  // 1-day change
   change: number;
   changePercent: number;
+
+  // 7-day change
+  change7d?: number;
+  changePercent7d?: number;
+
+  // 30-day change
+  change30d?: number;
+  changePercent30d?: number;
+
   lastUpdated: string;
   unit?: string;
   history?: HistoricalDataPoint[];

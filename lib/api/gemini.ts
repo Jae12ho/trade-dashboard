@@ -27,22 +27,33 @@ export async function generateMarketPrediction(
     bitcoin,
   } = dashboardData.indicators;
 
-  const prompt = `You are a professional financial market analyst. Based on the following 9 economic indicators, provide a comprehensive market analysis.
+  const formatPeriodChanges = (indicator: typeof us10yYield) => {
+    const changes = [`1D: ${indicator.changePercent >= 0 ? '+' : ''}${indicator.changePercent.toFixed(2)}%`];
+    if (indicator.changePercent7d !== undefined) {
+      changes.push(`7D: ${indicator.changePercent7d >= 0 ? '+' : ''}${indicator.changePercent7d.toFixed(2)}%`);
+    }
+    if (indicator.changePercent30d !== undefined) {
+      changes.push(`30D: ${indicator.changePercent30d >= 0 ? '+' : ''}${indicator.changePercent30d.toFixed(2)}%`);
+    }
+    return changes.join(', ');
+  };
+
+  const prompt = `You are a professional financial market analyst. Based on the following 9 economic indicators with multi-period changes, provide a comprehensive market analysis.
 
 **Macro Indicators:**
-1. US 10-Year Treasury Yield: ${us10yYield.value.toFixed(2)}% (Change: ${us10yYield.changePercent >= 0 ? '+' : ''}${us10yYield.changePercent.toFixed(2)}%)
-2. US Dollar Index (DXY): ${dxy.value.toFixed(2)} (Change: ${dxy.changePercent >= 0 ? '+' : ''}${dxy.changePercent.toFixed(2)}%)
-3. High Yield Spread: ${highYieldSpread.value.toFixed(2)} bps (Change: ${highYieldSpread.changePercent >= 0 ? '+' : ''}${highYieldSpread.changePercent.toFixed(2)}%)
-4. M2 Money Supply: $${m2MoneySupply.value.toFixed(2)}B (Change: ${m2MoneySupply.changePercent >= 0 ? '+' : ''}${m2MoneySupply.changePercent.toFixed(2)}%)
+1. US 10-Year Treasury Yield: ${us10yYield.value.toFixed(2)}% (${formatPeriodChanges(us10yYield)})
+2. US Dollar Index (DXY): ${dxy.value.toFixed(2)} (${formatPeriodChanges(dxy)})
+3. High Yield Spread: ${highYieldSpread.value.toFixed(2)} bps (${formatPeriodChanges(highYieldSpread)})
+4. M2 Money Supply: $${m2MoneySupply.value.toFixed(2)}B (${formatPeriodChanges(m2MoneySupply)})
 
 **Commodity & Asset Indicators:**
-5. Crude Oil (WTI): $${crudeOil.value.toFixed(2)}/barrel (Change: ${crudeOil.changePercent >= 0 ? '+' : ''}${crudeOil.changePercent.toFixed(2)}%)
-6. Copper/Gold Ratio: ${copperGoldRatio.value.toFixed(3)}×100 (Change: ${copperGoldRatio.changePercent >= 0 ? '+' : ''}${copperGoldRatio.changePercent.toFixed(2)}%)
-7. Bitcoin (BTC/USD): $${bitcoin.value.toFixed(2)} (Change: ${bitcoin.changePercent >= 0 ? '+' : ''}${bitcoin.changePercent.toFixed(2)}%)
+5. Crude Oil (WTI): $${crudeOil.value.toFixed(2)}/barrel (${formatPeriodChanges(crudeOil)})
+6. Copper/Gold Ratio: ${copperGoldRatio.value.toFixed(3)}×100 (${formatPeriodChanges(copperGoldRatio)})
+7. Bitcoin (BTC/USD): $${bitcoin.value.toFixed(2)} (${formatPeriodChanges(bitcoin)})
 
 **Market Sentiment Indicators:**
-8. Manufacturing Confidence (OECD): ${pmi.value.toFixed(2)} (Change: ${pmi.changePercent >= 0 ? '+' : ''}${pmi.changePercent.toFixed(2)}%)
-9. VIX (Fear Index): ${putCallRatio.value.toFixed(2)} (Change: ${putCallRatio.changePercent >= 0 ? '+' : ''}${putCallRatio.changePercent.toFixed(2)}%)
+8. Manufacturing Confidence (OECD): ${pmi.value.toFixed(2)} (${formatPeriodChanges(pmi)})
+9. VIX (Fear Index): ${putCallRatio.value.toFixed(2)} (${formatPeriodChanges(putCallRatio)})
 
 Please provide your analysis in the following JSON format:
 {
@@ -52,13 +63,15 @@ Please provide your analysis in the following JSON format:
 }
 
 Guidelines:
-- **Macro Analysis**: Consider yields, dollar strength, credit spreads, and money supply (liquidity)
-- **Asset Signals**: Oil/inflation, Copper-Gold/growth, Bitcoin/risk appetite & digital asset adoption
-- **Market Sentiment**: Manufacturing confidence, VIX fear/greed
-- **Bitcoin Context**: Analyze BTC movement vs M2 (liquidity), DXY (dollar strength), and risk assets
-- Synthesize all 9 indicators into a coherent market outlook
-- Keep reasoning concise but comprehensive
-- List 3-4 key risks to watch
+- **Multi-Period Analysis**: Consider short-term (1D), medium-term (7D), and long-term (30D) trends for each indicator
+- **Macro Analysis**: Evaluate yields, dollar strength, credit spreads, and money supply (liquidity) across different timeframes
+- **Asset Signals**: Analyze Oil/inflation, Copper-Gold/growth, Bitcoin/risk appetite & digital asset adoption with trend context
+- **Market Sentiment**: Assess Manufacturing confidence and VIX fear/greed levels and their momentum
+- **Trend Divergence**: Identify when short-term and long-term trends diverge (e.g., 1D positive but 30D negative)
+- **Bitcoin Context**: Analyze BTC movement vs M2 (liquidity), DXY (dollar strength), and risk assets across periods
+- Synthesize all 9 indicators with their multi-period trends into a coherent market outlook
+- Keep reasoning concise but comprehensive (3-4 sentences)
+- List 3-4 key risks to watch based on trend analysis
 
 IMPORTANT: Respond in Korean language. The "reasoning" and "risks" fields must be written in Korean.
 Respond ONLY with the JSON object, no additional text.`;
