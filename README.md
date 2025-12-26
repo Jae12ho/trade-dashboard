@@ -24,11 +24,12 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
   - 30일(또는 3개월) 변화율에 따른 색상 구분 (상승=녹색, 하락=빨간색)
 
 - 🤖 **AI 기반 시장 분석**
-  - Google Gemini API를 활용한 종합 시장 분석
-  - 30분 인메모리 캐싱으로 API 효율성 향상
+  - Google Gemini API (gemini-2.5-flash)를 활용한 종합 시장 분석
+  - 24시간 인메모리 캐싱으로 API 효율성 향상 (일별 데이터 주기에 최적화)
   - 한국어로 제공되는 시장 전망 및 리스크 분석
   - 강세(Bullish) / 약세(Bearish) / 중립(Neutral) 심리 분석
-  - API 한도 초과 시 명확한 오류 메시지 표시
+  - **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시된 분석 자동 제공
+  - 실시간 Refresh 버튼으로 수동 갱신 가능
 
 - 🌓 **다크 모드 지원**
   - 시스템 설정에 따른 자동 다크 모드 전환
@@ -138,7 +139,8 @@ trade-dashboard/
 │   ├── Dashboard.tsx             # 메인 대시보드 컴포넌트
 │   ├── IndicatorCard.tsx         # 개별 지표 카드
 │   ├── MiniChart.tsx             # 30일 추세 차트
-│   └── AIPrediction.tsx          # AI 분석 표시
+│   ├── AIPrediction.tsx          # AI 분석 표시
+│   └── ThemeScript.tsx           # 다크 모드 스크립트
 │
 ├── lib/                          # 유틸리티 및 API
 │   ├── types/
@@ -148,9 +150,6 @@ trade-dashboard/
 │   │   └── gemini.ts             # Gemini AI API 연동
 │   └── cache/
 │       └── gemini-cache.ts       # Gemini API 인메모리 캐시
-│
-├── ai/
-│   └── PLAN.md                   # 개발 계획 문서
 │
 ├── public/                       # 정적 파일
 ├── .env.local                    # 환경 변수 (git에 포함되지 않음)
@@ -211,8 +210,9 @@ npm run lint
 
 ### Gemini AI 캐싱 (lib/cache/gemini-cache.ts)
 - **저장 방식**: 인메모리 Map (비영구적)
-- **TTL**: 30분
+- **TTL**: 24시간 (일별 데이터 업데이트 주기에 맞춤)
 - **캐시 키**: 지표 값의 해시 (유사한 값은 동일 캐시 사용)
+- **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시 자동 사용
 - **주의**: 서버 재시작 시 모든 캐시 초기화됨
 
 ## 주요 특징
@@ -243,12 +243,18 @@ Copper/Gold Ratio = (Copper Price / Gold Price) × 100
 
 ### AI 분석 (한국어)
 
-Google Gemini API를 활용하여 9개 지표를 종합 분석:
+Google Gemini API (gemini-2.5-flash)를 활용하여 9개 지표를 종합 분석:
 - **심리 분석**: 강세(Bullish), 약세(Bearish), 중립(Neutral)
 - **분석 내용**: 시장 상황에 대한 3-4문장 요약 (한국어)
 - **리스크**: 주요 위험 요소 3-4개 나열
-- **캐싱**: 동일한 지표 값에 대해 30분간 캐시 재사용
-- **에러 처리**: API 한도 초과 시 명확한 한국어 메시지 표시
+- **캐싱**: 동일한 지표 값에 대해 24시간 캐시 재사용 (일별 데이터 주기에 맞춤)
+- **Fallback 메커니즘**:
+  - API 한도 초과 시 최근 24시간 내 캐시된 분석 자동 제공
+  - UI에 노란색 경고 배너로 Fallback 상태 표시
+  - 타임스탬프에 "(과거 분석)" 라벨 추가
+- **에러 처리**:
+  - Fallback 캐시가 없을 경우 명확한 한국어 에러 메시지 표시
+  - Retry 버튼으로 재시도 가능
 
 ## 알려진 이슈 및 제한사항
 
@@ -257,7 +263,8 @@ Google Gemini API를 활용하여 9개 지표를 종합 분석:
 2. **Gemini API 무료 할당량**:
    - 분당 15회 요청 제한
    - 일일 1,500회 요청 제한
-   - 한도 초과 시 "API 사용 한도가 초과되었습니다" 메시지 표시
+   - 한도 초과 시 자동으로 최근 24시간 내 캐시 사용 (Fallback)
+   - Fallback 캐시가 없을 경우 "API 사용 한도가 초과되었습니다" 에러 메시지 표시
 3. **CoinGecko 무료 티어**: 분당 10-50회 호출 제한 (5분 갱신으로 충분)
 
 ### 데이터 특성
@@ -275,4 +282,4 @@ Google Gemini API를 활용하여 9개 지표를 종합 분석:
 
 ---
 
-**최종 업데이트**: 2025-12-26
+**최종 업데이트**: 2025-12-27

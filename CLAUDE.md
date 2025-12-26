@@ -11,7 +11,7 @@ This is a real-time financial market dashboard built with Next.js 16 (App Router
 - React 19.2.3 with client/server component split
 - TypeScript 5 (strict mode)
 - Tailwind CSS 4 (with dark mode support)
-- Google Gemini API (gemini-2.5-flash-lite) for AI analysis
+- Google Gemini API (gemini-2.5-flash) for AI analysis
 - Recharts 3.6.0 for data visualization
 
 ## Development Commands
@@ -87,6 +87,7 @@ IndicatorCard + MiniChart components
   IndicatorCard.tsx           # Individual metric card display
   MiniChart.tsx               # Recharts line chart for 30-day trend
   AIPrediction.tsx            # AI sentiment & analysis display
+  ThemeScript.tsx             # Dark mode initialization script
 
 /lib
   /types
@@ -94,9 +95,12 @@ IndicatorCard + MiniChart components
   /api
     indicators.ts             # External API fetch functions (FRED, Yahoo, CoinGecko)
     gemini.ts                 # Google Gemini API integration
+  /cache
+    gemini-cache.ts           # In-memory cache for Gemini responses (24h TTL)
 
 /ai
-  PLAN.md                     # Development plans (Phase 7, Phase 8 docs)
+  PLAN.md                     # Development plans (Phase 7, 8, 9)
+  TO_DO.md                    # Task tracking
 ```
 
 ## The 9 Indicators
@@ -188,7 +192,7 @@ To add a new indicator, follow this pattern:
 ### Yahoo Finance API
 - Endpoint: `https://query1.finance.yahoo.com/v8/finance/chart/{symbol}`
 - Auth: None required
-- Query: `?range=1mo&interval=1d`
+- Query: `?range=3mo&interval=1d`
 - Response: Nested structure with `chart.result[0].meta` and `indicators.quote[0]`
 - Current price: `meta.regularMarketPrice`
 - Previous close: `meta.chartPreviousClose`
@@ -198,17 +202,18 @@ To add a new indicator, follow this pattern:
 
 ### CoinGecko API
 - Current Price: `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true`
-- Historical: `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30&interval=daily`
+- Historical: `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=40&interval=daily`
 - Auth: None required
 - Cache: Current 5-min, historical 1-hour
 - Calculate `previous` from `current / (1 + usd_24h_change / 100)`
 
 ### Google Gemini API
-- Model: `gemini-2.5-flash-lite`
+- Model: `gemini-2.5-flash`
 - Response language: Korean (specified in prompt)
 - Output format: JSON with `{ sentiment, reasoning, risks }`
 - Parse response: Extract JSON via regex `/{[\s\S]*}/`
 - Include all 9 indicators in formatted prompt
+- Rate limits: 15 requests/min, 1,500 requests/day (free tier)
 
 ## Calculated Indicators
 
@@ -270,7 +275,7 @@ To add a new indicator, follow this pattern:
 - Yahoo Finance: Increase `revalidate` time or switch to alternative data source
 - CoinGecko: Free tier limits ~10-50 calls/min (should be sufficient)
 - FRED: 120 requests/60 seconds (generous, unlikely to hit)
-- Gemini: 20 requests/day on free tier (monitor usage)
+- Gemini: 15 requests/min, 1,500 requests/day on free tier (monitor usage)
 
 ### Testing Changes
 
@@ -329,16 +334,32 @@ The `getFilteredHistory` function ensures chart data matches the period labels:
 
 **Cache Implementation** (lib/cache/gemini-cache.ts):
 - **Type**: In-memory Map (volatile, non-persistent)
-- **TTL**: 30 minutes
+- **TTL**: 24 hours (86,400,000 ms)
+  - Aligns with daily indicator update cycle
+  - 7 of 9 indicators update daily (trading days only)
+  - Maximizes fallback stability for quota errors
+  - Covers weekends (Friday data available through Saturday)
 - **Key**: Hash of rounded indicator values (to improve cache hit rate for similar data)
 - **Behavior**:
   - Cache clears on server restart/hot reload
   - First request after restart always calls Gemini API
-  - Automatic cleanup of expired entries
+  - Automatic cleanup of expired entries on each `setPrediction()` call
+  - TTL checked on both read (`getPrediction()`) and cleanup
+
+**Fallback Mechanism**:
+- When Gemini API quota is exceeded and exact cache match fails:
+  1. `getLatestValidPrediction()` searches all cache entries
+  2. Filters entries within TTL (24 hours)
+  3. Returns most recent prediction by timestamp
+  4. UI displays with `isFallback: true` and yellow warning banner
+- **Important**: Fallback only works if at least one successful API call was cached
+- Empty cache (server restart, no prior calls) → quota error message shown
 
 **Error Handling**:
 - API quota/rate limit errors detected by keywords: `quota`, `rate limit`, `429`, `resource exhausted`
 - Returns HTTP 429 with Korean message: "API 사용 한도가 초과되었습니다."
+- If fallback cache available: Returns cached prediction with warning
+- If no fallback: Returns error response
 - UI displays specific quota exceeded message vs generic errors
 
 ## Data Collection Limits

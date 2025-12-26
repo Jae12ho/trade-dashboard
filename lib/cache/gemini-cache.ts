@@ -9,13 +9,13 @@ interface CachedPrediction {
 
 /**
  * Gemini API 응답을 인메모리 캐싱하는 클래스
- * - TTL: 30분 (1800초)
+ * - TTL: 24시간 (86400초)
  * - 지표 데이터 해시 기반 캐시 키 생성
  * - 자동 만료 캐시 정리
  */
 class GeminiCache {
   private cache: Map<string, CachedPrediction> = new Map();
-  private ttl: number = 30 * 60 * 1000; // 30분 (밀리초)
+  private ttl: number = 24 * 60 * 60 * 1000; // 24시간 (밀리초)
 
   /**
    * 캐시에서 예측 가져오기
