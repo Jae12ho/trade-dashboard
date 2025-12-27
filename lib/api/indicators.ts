@@ -351,10 +351,10 @@ export async function getCopperGoldRatio(): Promise<IndicatorData> {
       fetchYahooFinanceData('GC=F'), // Gold Futures
     ]);
 
-    // Calculate current ratio (multiply by 100 for readability)
-    // Standard practice: (Copper price / Gold price) × 100
+    // Calculate current ratio (multiply by 10000 for readability)
+    // Standard practice: (Copper price / Gold price) × 10000
     const currentRatio = copper.current / gold.current;
-    const current = currentRatio * 100;
+    const current = currentRatio * 10000;
 
     // Calculate historical ratio by matching dates
     const history: HistoricalDataPoint[] = [];
@@ -365,7 +365,7 @@ export async function getCopperGoldRatio(): Promise<IndicatorData> {
         if (copper.history[i].date === gold.history[i].date) {
           history.push({
             date: copper.history[i].date,
-            value: (copper.history[i].value / gold.history[i].value) * 100,
+            value: (copper.history[i].value / gold.history[i].value) * 10000,
           });
         }
       }
@@ -393,7 +393,7 @@ export async function getCopperGoldRatio(): Promise<IndicatorData> {
       change30d,
       changePercent30d,
       lastUpdated: new Date().toISOString(),
-      unit: '×100',
+      unit: '×10000',
       history,
     };
   } catch (error) {
@@ -420,11 +420,7 @@ async function fetchCoinGeckoPrice(): Promise<{
 
   const priceData: CoinGeckoSimplePrice = await priceResponse.json();
 
-  const current = priceData.bitcoin.usd;
   const changePercent = priceData.bitcoin.usd_24h_change;
-
-  // Calculate previous price from 24h change
-  const previous = current / (1 + changePercent / 100);
 
   // Fetch 40-day historical data (need buffer for 30-day calculation)
   const chartUrl = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=40&interval=daily';
@@ -438,6 +434,12 @@ async function fetchCoinGeckoPrice(): Promise<{
   }
 
   const chartData: CoinGeckoMarketChart = await chartResponse.json();
+
+  // Use the latest price from market_chart (includes decimals, unlike simple/price)
+  const current = chartData.prices[chartData.prices.length - 1][1];
+
+  // Calculate previous price from 24h change
+  const previous = current / (1 + changePercent / 100);
 
   // Convert to our HistoricalDataPoint format
   const history: HistoricalDataPoint[] = chartData.prices.map(([timestamp, price]) => ({

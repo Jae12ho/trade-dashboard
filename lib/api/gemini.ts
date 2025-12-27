@@ -50,7 +50,7 @@ export async function generateMarketPrediction(
 
 **Commodity & Asset Indicators:**
 5. Crude Oil (WTI): $${crudeOil.value.toFixed(2)}/barrel (${formatPeriodChanges(crudeOil)})
-6. Copper/Gold Ratio: ${copperGoldRatio.value.toFixed(3)}×100 (${formatPeriodChanges(copperGoldRatio)})
+6. Copper/Gold Ratio: ${copperGoldRatio.value.toFixed(2)}×10000 (${formatPeriodChanges(copperGoldRatio)})
 7. Bitcoin (BTC/USD): $${bitcoin.value.toFixed(2)} (${formatPeriodChanges(bitcoin)})
 
 **Market Sentiment Indicators:**
