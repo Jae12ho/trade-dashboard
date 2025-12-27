@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllIndicators } from '@/lib/api/indicators';
 import { generateMarketPrediction } from '@/lib/api/gemini';
-import { geminiCache } from '@/lib/cache/gemini-cache';
+import { geminiCache } from '@/lib/cache/gemini-cache-redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ export async function GET() {
     };
 
     // Check cache first
-    const cachedPrediction = geminiCache.getPrediction(dashboardData);
+    const cachedPrediction = await geminiCache.getPrediction(dashboardData);
     if (cachedPrediction) {
       console.log('[API] Returning cached Gemini prediction');
       return NextResponse.json(cachedPrediction);
@@ -27,7 +27,7 @@ export async function GET() {
     const prediction = await generateMarketPrediction(dashboardData);
 
     // Store in cache
-    geminiCache.setPrediction(dashboardData, prediction);
+    await geminiCache.setPrediction(dashboardData, prediction);
 
     return NextResponse.json(prediction);
   } catch (error) {
@@ -39,7 +39,7 @@ export async function GET() {
 
     // If quota error, try to use fallback cache
     if (isQuotaError) {
-      const fallbackPrediction = geminiCache.getLatestValidPrediction();
+      const fallbackPrediction = await geminiCache.getLatestValidPrediction();
       if (fallbackPrediction) {
         console.log('[API] Using fallback prediction due to quota error');
         return NextResponse.json({

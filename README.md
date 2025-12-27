@@ -25,10 +25,11 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
 
 - 🤖 **AI 기반 시장 분석**
   - Google Gemini API (gemini-2.5-flash)를 활용한 종합 시장 분석
-  - 24시간 인메모리 캐싱으로 API 효율성 향상 (일별 데이터 주기에 최적화)
+  - Upstash Redis 기반 24시간 영구 캐싱으로 API 효율성 향상
+  - 서버리스 환경에서 모든 인스턴스 간 캐시 공유
   - 한국어로 제공되는 시장 전망 및 리스크 분석
   - 강세(Bullish) / 약세(Bearish) / 중립(Neutral) 심리 분석
-  - **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시된 분석 자동 제공
+  - **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시된 분석 자동 제공 (프로덕션 환경에서 안정적으로 작동)
   - 실시간 Refresh 버튼으로 수동 갱신 가능
 
 - 🌓 **다크 모드 지원**
@@ -45,6 +46,7 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
 
 ### Backend & APIs
 - **Next.js API Routes** - 서버사이드 API 엔드포인트
+- **Upstash Redis** - 서버리스 최적화된 영구 캐시 저장소
 - **FRED API** - 미국 연방준비은행 경제 데이터
 - **Yahoo Finance API** - 금융 시장 데이터
 - **CoinGecko API** - 암호화폐 시장 데이터
@@ -70,13 +72,24 @@ npm install
 프로젝트 루트에 `.env.local` 파일을 생성하고 다음 API 키를 추가하세요:
 
 ```bash
+# Google Gemini API
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# FRED API (Federal Reserve Economic Data)
 FRED_API_KEY=your_fred_api_key_here
+
+# Upstash Redis (for persistent Gemini cache in serverless environment)
+UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url_here
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token_here
 ```
 
 **API 키 발급 방법:**
 - **GEMINI_API_KEY**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 발급
 - **FRED_API_KEY**: [FRED API](https://fred.stlouisfed.org/docs/api/api_key.html)에서 무료 발급
+- **UPSTASH_REDIS_REST_URL & TOKEN**:
+  1. [Upstash Console](https://console.upstash.com)에서 계정 생성
+  2. Redis 데이터베이스 생성 (Global, 무료 티어 사용 가능)
+  3. REST API 탭에서 URL과 Token 복사
 
 **참고:** Yahoo Finance와 CoinGecko는 인증이 필요하지 않습니다.
 
@@ -149,7 +162,7 @@ trade-dashboard/
 │   │   ├── indicators.ts         # 외부 API 연동 함수
 │   │   └── gemini.ts             # Gemini AI API 연동
 │   └── cache/
-│       └── gemini-cache.ts       # Gemini API 인메모리 캐시
+│       └── gemini-cache-redis.ts # Upstash Redis 캐시 (24h TTL)
 │
 ├── public/                       # 정적 파일
 ├── .env.local                    # 환경 변수 (git에 포함되지 않음)
@@ -208,12 +221,19 @@ npm run lint
 - **API 라우트**: 강제 동적 렌더링 (`dynamic = 'force-dynamic'`)
 - **클라이언트 폴링**: 5분마다 자동 새로고침
 
-### Gemini AI 캐싱 (lib/cache/gemini-cache.ts)
-- **저장 방식**: 인메모리 Map (비영구적)
-- **TTL**: 24시간 (일별 데이터 업데이트 주기에 맞춤)
-- **캐시 키**: 지표 값의 해시 (유사한 값은 동일 캐시 사용)
+### Gemini AI 캐싱 (lib/cache/gemini-cache-redis.ts)
+- **저장 방식**: Upstash Redis (영구적, 서버리스 최적화)
+- **TTL**: 24시간 (일별 데이터 업데이트 주기에 맞춤, Redis가 자동 관리)
+- **캐시 키 전략**:
+  - Primary: `gemini:prediction:{hash}` (정확한 데이터 매칭)
+  - Fallback: `gemini:fallback:{timestamp}` (최신 예측 조회)
+- **장점**:
+  - 모든 서버리스 인스턴스 간 캐시 공유
+  - Cold start 후에도 캐시 유지
+  - 프로덕션 환경에서 Fallback 메커니즘 안정적 작동
+  - HTTPS REST API로 연결 풀 불필요
 - **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시 자동 사용
-- **주의**: 서버 재시작 시 모든 캐시 초기화됨
+- **무료 티어**: Upstash 무료 10,000 commands/day (월 300,000)
 
 ## 주요 특징
 
@@ -268,7 +288,7 @@ Google Gemini API (gemini-2.5-flash)를 활용하여 9개 지표를 종합 분�
 3. **CoinGecko 무료 티어**: 분당 10-50회 호출 제한 (5분 갱신으로 충분)
 
 ### 데이터 특성
-4. **캐시 비영구성**: Gemini AI 캐시는 인메모리 방식으로 서버 재시작 시 초기화됨
+4. **캐시 영구성**: Gemini AI 캐시는 Upstash Redis를 사용하여 서버 재시작/배포 후에도 24시간 동안 유지됨
 5. **월별 데이터 지연**: M2와 Manufacturing Confidence는 월 단위로 업데이트되어 최신성이 떨어질 수 있음
 6. **거래일 vs 달력일**: 일별 지표는 거래일만 데이터가 존재하므로 주말/공휴일은 공백
 

@@ -35,8 +35,10 @@ npm run lint
 Create `.env.local` in project root with required API keys:
 
 ```bash
-GEMINI_API_KEY=<your-key>     # https://makersuite.google.com/app/apikey
-FRED_API_KEY=<your-key>       # https://fred.stlouisfed.org/docs/api/api_key.html
+GEMINI_API_KEY=<your-key>              # https://makersuite.google.com/app/apikey
+FRED_API_KEY=<your-key>                # https://fred.stlouisfed.org/docs/api/api_key.html
+UPSTASH_REDIS_REST_URL=<your-url>      # https://console.upstash.com (Redis database)
+UPSTASH_REDIS_REST_TOKEN=<your-token>  # REST API credentials from Upstash
 ```
 
 Yahoo Finance and CoinGecko APIs require no authentication.
@@ -96,7 +98,7 @@ IndicatorCard + MiniChart components
     indicators.ts             # External API fetch functions (FRED, Yahoo, CoinGecko)
     gemini.ts                 # Google Gemini API integration
   /cache
-    gemini-cache.ts           # In-memory cache for Gemini responses (24h TTL)
+    gemini-cache-redis.ts     # Upstash Redis cache for Gemini responses (24h TTL)
 
 /ai
   PLAN.md                     # Development plans (Phase 7, 8, 9)
@@ -332,35 +334,61 @@ The `getFilteredHistory` function ensures chart data matches the period labels:
 
 ## Gemini API Caching
 
-**Cache Implementation** (lib/cache/gemini-cache.ts):
-- **Type**: In-memory Map (volatile, non-persistent)
-- **TTL**: 24 hours (86,400,000 ms)
+**Cache Implementation** (lib/cache/gemini-cache-redis.ts):
+- **Type**: Upstash Redis (persistent, serverless-optimized)
+- **Storage**: Global distributed cache shared across all function instances
+- **TTL**: 24 hours (86,400 seconds)
   - Aligns with daily indicator update cycle
   - 7 of 9 indicators update daily (trading days only)
   - Maximizes fallback stability for quota errors
   - Covers weekends (Friday data available through Saturday)
-- **Key**: Hash of rounded indicator values (to improve cache hit rate for similar data)
+- **Key Strategy**:
+  - Primary: `gemini:prediction:{hash}` (exact data match)
+  - Fallback: `gemini:fallback:{timestamp}` (latest prediction retrieval)
+  - Hash: JSON of rounded indicator values (improves cache hit rate)
 - **Behavior**:
-  - Cache clears on server restart/hot reload
-  - First request after restart always calls Gemini API
-  - Automatic cleanup of expired entries on each `setPrediction()` call
-  - TTL checked on both read (`getPrediction()`) and cleanup
+  - Cache persists across serverless cold starts
+  - All Vercel function instances share same Redis cache
+  - Automatic TTL management by Redis
+  - Automatic cleanup keeps last 10 fallback entries
+  - HTTPS REST API (no connection pooling needed)
+
+**Why Upstash Redis Instead of In-Memory**:
+- **Problem**: Vercel serverless functions run in isolated containers
+- **Issue**: In-memory Map only exists within single instance
+- **Result**: Cache not shared between instances, fallback fails in production
+- **Solution**: Upstash Redis provides persistent, globally accessible cache
+- **Benefit**: Fallback works reliably in production environment
 
 **Fallback Mechanism**:
-- When Gemini API quota is exceeded and exact cache match fails:
-  1. `getLatestValidPrediction()` searches all cache entries
-  2. Filters entries within TTL (24 hours)
-  3. Returns most recent prediction by timestamp
+- When Gemini API quota is exceeded:
+  1. `getLatestValidPrediction()` searches all `gemini:fallback:*` keys
+  2. Sorts by timestamp (newest first)
+  3. Returns most recent prediction within TTL (24 hours)
   4. UI displays with `isFallback: true` and yellow warning banner
-- **Important**: Fallback only works if at least one successful API call was cached
-- Empty cache (server restart, no prior calls) → quota error message shown
+- **Advantages over in-memory**:
+  - Works across all serverless instances
+  - Survives cold starts and deployments
+  - Persists even when no traffic for hours
+- **Important**: Fallback requires at least one successful API call within 24h
 
 **Error Handling**:
 - API quota/rate limit errors detected by keywords: `quota`, `rate limit`, `429`, `resource exhausted`
 - Returns HTTP 429 with Korean message: "API 사용 한도가 초과되었습니다."
-- If fallback cache available: Returns cached prediction with warning
-- If no fallback: Returns error response
+- If fallback cache available: Returns cached prediction with warning (HTTP 200)
+- If no fallback: Returns error response (HTTP 429)
 - UI displays specific quota exceeded message vs generic errors
+
+**Environment Variables**:
+```bash
+UPSTASH_REDIS_REST_URL=https://your-region.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-token
+```
+
+**Free Tier Limits** (Upstash):
+- 10,000 commands/day (300,000/month)
+- 256 MB storage
+- Sufficient for ~2,000-3,000 user requests/day
 
 ## Data Collection Limits
 
@@ -380,6 +408,7 @@ See `/ai/PLAN.md` for detailed development plans:
 - Phase 7: Added M2 Money Supply, Crude Oil, Copper/Gold Ratio, PMI, VIX
 - Phase 8: Added Bitcoin (BTC/USD) via CoinGecko API
 - Phase 9: Multi-period change percentages (1D/7D/30D) with calendar-based calculation
+- Phase 10: Migrated Gemini cache to Upstash Redis for serverless persistence
 
 ## Quirks & Known Issues
 
@@ -389,4 +418,4 @@ See `/ai/PLAN.md` for detailed development plans:
 4. **Put/Call Ratio**: VIX used as proxy (CBOE data requires paid subscription)
 5. **Copper/Gold display**: Multiplied by 100 for readability (0.124 instead of 0.001238)
 6. **Negative value percentages**: M2 and MFG can have negative base values; `Math.abs(pastValue)` used in denominator to ensure correct sign
-7. **Cache persistence**: Gemini cache is in-memory only; all predictions cleared on server restart
+7. **Cache persistence**: Gemini cache uses Upstash Redis; persists across deployments and serverless cold starts with 24h TTL
