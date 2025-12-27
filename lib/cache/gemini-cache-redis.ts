@@ -135,7 +135,7 @@ class GeminiCacheRedis {
       ratio: data.indicators.copperGoldRatio.value.toFixed(2),
       pmi: data.indicators.pmi.value.toFixed(1),
       vix: data.indicators.putCallRatio.value.toFixed(1),
-      btc: data.indicators.bitcoin.value.toFixed(0),
+      btc: (Math.round(data.indicators.bitcoin.value / 500) * 500).toFixed(0),
     };
 
     return JSON.stringify(rounded);
