@@ -7,6 +7,7 @@ export default function AIPrediction() {
   const [prediction, setPrediction] = useState<MarketPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dots, setDots] = useState(1);
 
   const fetchPrediction = async () => {
     try {
@@ -38,6 +39,17 @@ export default function AIPrediction() {
   useEffect(() => {
     fetchPrediction();
   }, []);
+
+  // 점(...) 애니메이션 효과
+  useEffect(() => {
+    if (loading) {
+      const interval = setInterval(() => {
+        setDots(prev => (prev % 3) + 1); // 1 -> 2 -> 3 -> 1
+      }, 500);
+
+      return () => clearInterval(interval);
+    }
+  }, [loading]);
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
@@ -74,11 +86,17 @@ export default function AIPrediction() {
             AI Market Analysis
           </h2>
         </div>
+
         <div className="flex items-center justify-center py-8">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-8 h-8 border-4 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-zinc-50 rounded-full animate-spin"></div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-300">
-              Analyzing market conditions...
+            {/* 꿈틀거리는 검은 원 */}
+            <div
+              className="w-14 h-14 bg-zinc-900 dark:bg-zinc-50 rounded-full"
+              style={{ animation: 'wiggle 2s ease-in-out infinite' }}
+            ></div>
+
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              Analyzing market conditions{'.'.repeat(dots)}
             </p>
           </div>
         </div>
