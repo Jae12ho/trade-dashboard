@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { MarketPrediction } from '@/lib/api/gemini';
+import { DashboardData } from '@/lib/types/indicators';
 
-export default function AIPrediction() {
+interface AIPredictionProps {
+  dashboardData: DashboardData;
+}
+
+export default function AIPrediction({ dashboardData }: AIPredictionProps) {
   const [prediction, setPrediction] = useState<MarketPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +19,13 @@ export default function AIPrediction() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/ai-prediction');
+      const response = await fetch('/api/ai-prediction', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dashboardData),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();

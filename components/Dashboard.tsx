@@ -105,7 +105,7 @@ export default function Dashboard() {
         <IndicatorCard indicator={data.indicators.bitcoin} />
       </div>
 
-      <AIPrediction />
+      <AIPrediction dashboardData={data} />
 
       {loading && (
         <div className="mt-4 text-center">
