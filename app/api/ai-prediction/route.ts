@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           ...fallbackPrediction,
           isFallback: true,
-          fallbackMessage: 'API 사용 한도가 초과되었습니다. 이전 분석에서 가장 유사한 시장 상황의 분석을 표시합니다.',
+          fallbackMessage: 'API 사용 한도가 초과되었습니다. 금일 분석 내역에서 가장 유사한 시장 상황의 분석을 표시합니다.',
         });
       }
       console.log('[API] No fallback available, returning quota error');
