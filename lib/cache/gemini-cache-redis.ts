@@ -1,11 +1,26 @@
 import { Redis } from '@upstash/redis';
 import { DashboardData } from '../types/indicators';
 import { MarketPrediction } from '../api/gemini';
+import { DEFAULT_GEMINI_MODEL } from '../constants/gemini-models';
 
 interface CachedPrediction {
   prediction: MarketPrediction;
   timestamp: number;
   dataHash: string;
+}
+
+interface ParsedHash {
+  model: string;
+  us10y: number;
+  dxy: number;
+  spread: number;
+  m2: number;
+  oil: number;
+  ratio: number;
+  pmi: number;
+  vix: number;
+  btc: number;
+  [key: string]: string | number; // Allow dynamic indexing
 }
 
 const CACHE_PREFIX = 'gemini:prediction:';
@@ -31,8 +46,11 @@ class GeminiCacheRedis {
   /**
    * Get cached prediction by data hash
    */
-  async getPrediction(dashboardData: DashboardData): Promise<MarketPrediction | null> {
-    const hash = this.hashData(dashboardData);
+  async getPrediction(
+    dashboardData: DashboardData,
+    modelName: string
+  ): Promise<MarketPrediction | null> {
+    const hash = this.hashData(dashboardData, modelName);
     const key = `${CACHE_PREFIX}${hash}`;
 
     try {
@@ -57,9 +75,10 @@ class GeminiCacheRedis {
    */
   async setPrediction(
     dashboardData: DashboardData,
-    prediction: MarketPrediction
+    prediction: MarketPrediction,
+    modelName: string
   ): Promise<void> {
-    const hash = this.hashData(dashboardData);
+    const hash = this.hashData(dashboardData, modelName);
     const key = `${CACHE_PREFIX}${hash}`;
     const fallbackKey = `${FALLBACK_PREFIX}${Date.now()}`;
 
@@ -88,9 +107,10 @@ class GeminiCacheRedis {
   /**
    * Parse hash string back to numeric values
    */
-  private parseHash(hash: string): Record<string, number> {
+  private parseHash(hash: string): ParsedHash {
     const parsed = JSON.parse(hash);
     return {
+      model: parsed.model || DEFAULT_GEMINI_MODEL,
       us10y: parseFloat(parsed.us10y),
       dxy: parseFloat(parsed.dxy),
       spread: parseFloat(parsed.spread),
@@ -118,7 +138,7 @@ class GeminiCacheRedis {
 
     // Calculate min-max range for each indicator
     for (const key of keys) {
-      const values = allValues.map(v => v[key]);
+      const values = allValues.map(v => v[key] as number);
       const min = Math.min(...values);
       const max = Math.max(...values);
       ranges[key] = max - min;
@@ -135,13 +155,15 @@ class GeminiCacheRedis {
    * @param currentData - Current dashboard data to compare
    * @param cachedHash - Hash of cached prediction to compare against
    * @param dynamicRanges - Min-max ranges calculated from all cached predictions
+   * @param modelName - Model name to use for hashing current data
    */
   private calculateSimilarityHybrid(
     currentData: DashboardData,
     cachedHash: string,
-    dynamicRanges: Record<string, number>
+    dynamicRanges: Record<string, number>,
+    modelName: string
   ): number {
-    const current = this.parseHash(this.hashData(currentData));
+    const current = this.parseHash(this.hashData(currentData, modelName));
     const cached = this.parseHash(cachedHash);
 
     // Minimum thresholds: 1% of historical range (safety net to prevent division by zero)
@@ -168,7 +190,7 @@ class GeminiCacheRedis {
         minThresholds[key]
       );
 
-      const diff = Math.abs(current[key] - cached[key]) / effectiveRange;
+      const diff = Math.abs((current[key] as number) - (cached[key] as number)) / effectiveRange;
       sumSquaredDiffs += diff * diff;
     }
 
@@ -198,7 +220,8 @@ class GeminiCacheRedis {
    * Weighted scoring: 90% similarity, 10% recency
    */
   async getBestMatchingPrediction(
-    currentData: DashboardData
+    currentData: DashboardData,
+    modelName: string
   ): Promise<MarketPrediction | null> {
     try {
       const keys = await this.redis.keys(`${FALLBACK_PREFIX}*`);
@@ -216,10 +239,13 @@ class GeminiCacheRedis {
         })
       );
 
-      // Filter out null predictions while keeping key-prediction pairing
+      // Filter out null predictions and filter by model
       const validPairs = keyPredictionPairs.filter(
-        (pair): pair is { key: string; cached: CachedPrediction } =>
-          pair.cached !== null
+        (pair): pair is { key: string; cached: CachedPrediction } => {
+          if (pair.cached === null) return false;
+          const cachedModel = this.parseHash(pair.cached.dataHash).model;
+          return cachedModel === modelName;
+        }
       );
 
       if (validPairs.length === 0) return null;
@@ -235,7 +261,8 @@ class GeminiCacheRedis {
         const similarityScore = this.calculateSimilarityHybrid(
           currentData,
           cached.dataHash,
-          dynamicRanges
+          dynamicRanges,
+          modelName
         );
         const recencyScore = this.calculateRecencyScore(cached.timestamp);
 
@@ -315,8 +342,9 @@ class GeminiCacheRedis {
   /**
    * Hash dashboard data for cache key
    */
-  private hashData(data: DashboardData): string {
+  private hashData(data: DashboardData, modelName: string): string {
     const rounded = {
+      model: modelName,
       us10y: data.indicators.us10yYield.value.toFixed(2),
       dxy: data.indicators.dxy.value.toFixed(1),
       spread: data.indicators.highYieldSpread.value.toFixed(1),

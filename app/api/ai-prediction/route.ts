@@ -2,14 +2,31 @@ import { NextResponse } from 'next/server';
 import { generateMarketPrediction } from '@/lib/api/gemini';
 import { geminiCache } from '@/lib/cache/gemini-cache-redis';
 import { DashboardData } from '@/lib/types/indicators';
+import {
+  GeminiModelName,
+  DEFAULT_GEMINI_MODEL,
+  VALID_MODEL_NAMES
+} from '@/lib/constants/gemini-models';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  // Get dashboard data from request body (sent by client)
+  // Get dashboard data and model from request body (sent by client)
   let dashboardData: DashboardData;
+  let modelName: GeminiModelName = DEFAULT_GEMINI_MODEL;
+
   try {
-    dashboardData = await request.json();
+    const body = await request.json();
+    dashboardData = body.dashboardData || body;
+    modelName = body.modelName || DEFAULT_GEMINI_MODEL;
+
+    // Validate model name
+    if (!VALID_MODEL_NAMES.includes(modelName)) {
+      return NextResponse.json(
+        { error: 'invalid_model', message: 'Invalid model name' },
+        { status: 400 }
+      );
+    }
   } catch (error) {
     console.error('Error parsing request body:', error);
     return NextResponse.json(
@@ -23,18 +40,18 @@ export async function POST(request: Request) {
 
   try {
     // Check cache first
-    const cachedPrediction = await geminiCache.getPrediction(dashboardData);
+    const cachedPrediction = await geminiCache.getPrediction(dashboardData, modelName);
     if (cachedPrediction) {
-      console.log('[API] Returning cached Gemini prediction');
+      console.log(`[API] Returning cached Gemini prediction (model: ${modelName})`);
       return NextResponse.json(cachedPrediction);
     }
 
     // Cache miss - generate new prediction
-    console.log('[API] Cache miss - generating new Gemini prediction');
-    const prediction = await generateMarketPrediction(dashboardData);
+    console.log(`[API] Cache miss - generating new Gemini prediction (model: ${modelName})`);
+    const prediction = await generateMarketPrediction(dashboardData, modelName);
 
     // Store in cache
-    await geminiCache.setPrediction(dashboardData, prediction);
+    await geminiCache.setPrediction(dashboardData, prediction, modelName);
 
     return NextResponse.json(prediction);
   } catch (error) {
@@ -46,16 +63,19 @@ export async function POST(request: Request) {
 
     // If quota error, try to use similarity-based fallback cache
     if (isQuotaError) {
-      const fallbackPrediction = await geminiCache.getBestMatchingPrediction(dashboardData);
+      const fallbackPrediction = await geminiCache.getBestMatchingPrediction(
+        dashboardData,
+        modelName
+      );
       if (fallbackPrediction) {
-        console.log('[API] Using similarity-based fallback prediction due to quota error');
+        console.log(`[API] Using similarity-based fallback prediction due to quota error (model: ${modelName})`);
         return NextResponse.json({
           ...fallbackPrediction,
           isFallback: true,
           fallbackMessage: 'API 사용 한도가 초과되었습니다. 금일 분석 내역에서 가장 유사한 시장 상황의 분석을 표시합니다.',
         });
       }
-      console.log('[API] No fallback available, returning quota error');
+      console.log(`[API] No fallback available for model ${modelName}, returning quota error`);
     }
 
     return NextResponse.json(

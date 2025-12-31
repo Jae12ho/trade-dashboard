@@ -24,8 +24,13 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
   - 30일(또는 3개월) 변화율에 따른 색상 구분 (상승=녹색, 하락=빨간색)
 
 - 🤖 **AI 기반 시장 분석**
-  - Google Gemini API (gemini-2.5-flash)를 활용한 종합 시장 분석
-  - Upstash Redis 기반 24시간 영구 캐싱으로 API 효율성 향상
+  - **모델 선택 기능**: 3개의 Google Gemini 모델 중 선택 가능
+    - gemini-2.5-flash (기본값, 균형잡힌 성능)
+    - gemini-2.5-flash-lite (빠른 응답)
+    - gemini-2.5-pro (고급 분석)
+  - localStorage 기반 모델 선택 지속성 (페이지 새로고침 후에도 유지)
+  - API 할당량 초과 시 다른 모델로 즉시 전환 가능
+  - Upstash Redis 기반 24시간 영구 캐싱 (모델별 독립 캐시)
   - 서버리스 환경에서 모든 인스턴스 간 캐시 공유
   - 한국어로 제공되는 시장 전망 및 리스크 분석
   - 강세(Bullish) / 약세(Bearish) / 중립(Neutral) 심리 분석
@@ -161,8 +166,10 @@ trade-dashboard/
 │   ├── api/
 │   │   ├── indicators.ts         # 외부 API 연동 함수
 │   │   └── gemini.ts             # Gemini AI API 연동
-│   └── cache/
-│       └── gemini-cache-redis.ts # Upstash Redis 캐시 (24h TTL)
+│   ├── cache/
+│   │   └── gemini-cache-redis.ts # Upstash Redis 캐시 (24h TTL, 모델별 분리)
+│   └── constants/
+│       └── gemini-models.ts      # Gemini 모델 설정 (중앙 관리)
 │
 ├── public/                       # 정적 파일
 ├── .env.local                    # 환경 변수 (git에 포함되지 않음)
@@ -224,14 +231,16 @@ npm run lint
 ### Gemini AI 캐싱 (lib/cache/gemini-cache-redis.ts)
 - **저장 방식**: Upstash Redis (영구적, 서버리스 최적화)
 - **TTL**: 24시간 (일별 데이터 업데이트 주기에 맞춤, Redis가 자동 관리)
+- **모델별 캐시 분리**: 각 Gemini 모델별로 독립적인 캐시 유지 (교차 오염 방지)
 - **캐시 키 전략**:
-  - Primary: `gemini:prediction:{hash}` (정확한 데이터 매칭)
+  - Primary: `gemini:prediction:{hash}` (모델명 + 지표 값으로 해싱)
   - Fallback: `gemini:fallback:{timestamp}` (유사도 기반 최적 예측 조회)
 - **장점**:
   - 모든 서버리스 인스턴스 간 캐시 공유
   - Cold start 후에도 캐시 유지
   - 프로덕션 환경에서 Fallback 메커니즘 안정적 작동
   - HTTPS REST API로 연결 풀 불필요
+  - 모델 전환 시 각 모델의 독립적인 예측 유지
 - **Fallback 메커니즘 (Hybrid Min-Max 유사도 측정)**:
   - API 한도 초과 시 **현재 지표와 가장 유사한** 24시간 내 캐시 자동 선택
   - **동적 범위**: 실제 24시간 캐시 데이터의 변동폭 기반 정규화
@@ -330,43 +339,44 @@ API 할당량 초과 시, 단순히 최신 캐시를 반환하는 대신 **현�
 결과: 캐시 B 선택 (더 오래되었지만 현재 상황과 가장 유사)
 ```
 
+### Gemini 모델 선택 및 전환
+
+사용자가 UI에서 직접 Gemini 모델을 선택할 수 있는 기능:
+
+#### 지원 모델
+- **gemini-2.5-flash** (기본값): 균형잡힌 성능과 속도
+- **gemini-2.5-flash-lite**: 빠른 응답 속도 (경량 분석)
+- **gemini-2.5-pro**: 고급 분석 품질 (상세한 인사이트)
+
+#### 주요 특징
+- **localStorage 지속성**: 선택한 모델이 브라우저에 저장되어 페이지 새로고침 후에도 유지
+- **모델별 독립 캐싱**: 각 모델의 예측 결과가 별도로 캐싱되어 교차 오염 방지
+
+#### 기술 구현
+- **중앙 관리**: `lib/constants/gemini-models.ts`에서 모든 모델 설정 관리
+- **타입 안전성**: TypeScript 타입 추론으로 컴파일 타임 검증
+- **레이스 컨디션 방지**: React 상태 비동기 업데이트 문제 해결 (modelOverride 패턴)
+- **초기 마운트 최적화**: isInitialMount ref로 중복 API 호출 방지
+
 ### AI 분석 (한국어)
 
-Google Gemini API (gemini-2.5-flash)를 활용하여 9개 지표를 종합 분석:
+Google Gemini API를 활용하여 9개 지표를 종합 분석:
 - **심리 분석**: 강세(Bullish), 약세(Bearish), 중립(Neutral)
 - **분석 내용**: 시장 상황에 대한 3-4문장 요약 (한국어)
 - **리스크**: 주요 위험 요소 3-4개 나열
-- **캐싱**: 동일한 지표 값에 대해 24시간 캐시 재사용 (일별 데이터 주기에 맞춤)
+- **캐싱**: 동일한 지표 값 + 동일한 모델에 대해 24시간 캐시 재사용 (일별 데이터 주기에 맞춤)
 - **Fallback 메커니즘 (Hybrid Min-Max 유사도)**:
-  - API 한도 초과 시 **현재 지표와 가장 유사한** 24시간 내 캐시 자동 선택
+  - API 한도 초과 시 **현재 지표와 가장 유사한** 24시간 내 **동일 모델** 캐시 자동 선택
   - 단순 최신 캐시가 아닌, 9개 지표 종합 유사도 기반 최적 매칭
   - 동적 정규화로 24시간 내 변동폭에 맞춰 정확한 유사도 계산
+  - 모델별로 독립적인 Fallback 처리 (Flash 모델 한도 초과 시 Flash 캐시만 검색)
   - UI에 노란색 경고 배너로 Fallback 상태 표시
   - 타임스탬프에 "(과거 분석)" 라벨 추가
   - 메시지: "API 사용 한도가 초과되었습니다. 유사한 시장 상황의 분석을 표시합니다."
 - **에러 처리**:
   - Fallback 캐시가 없을 경우 명확한 한국어 에러 메시지 표시
+  - 에러 화면에서도 모델 선택기 활성화 (다른 모델로 전환 가능)
   - Retry 버튼으로 재시도 가능
-
-## 알려진 이슈 및 제한사항
-
-### API 제한
-1. **Yahoo Finance 속도 제한**: 과도한 요청 시 제한될 수 있음 (Next.js 캐싱으로 완화)
-2. **Gemini API 무료 할당량**:
-   - 분당 15회 요청 제한
-   - 일일 1,500회 요청 제한
-   - 한도 초과 시 자동으로 최근 24시간 내 캐시 사용 (Fallback)
-   - Fallback 캐시가 없을 경우 "API 사용 한도가 초과되었습니다" 에러 메시지 표시
-3. **CoinGecko 무료 티어**: 분당 10-50회 호출 제한 (5분 갱신으로 충분)
-
-### 데이터 특성
-4. **캐시 영구성**: Gemini AI 캐시는 Upstash Redis를 사용하여 서버 재시작/배포 후에도 24시간 동안 유지됨
-5. **월별 데이터 지연**: M2와 Manufacturing Confidence는 월 단위로 업데이트되어 최신성이 떨어질 수 있음
-6. **거래일 vs 달력일**: 일별 지표는 거래일만 데이터가 존재하므로 주말/공휴일은 공백
-
-## 라이선스
-
-이 프로젝트는 개인 프로젝트입니다.
 
 ## 기여
 
@@ -374,4 +384,4 @@ Google Gemini API (gemini-2.5-flash)를 활용하여 9개 지표를 종합 분�
 
 ---
 
-**최종 업데이트**: 2025-12-30
+**최종 업데이트**: 2025-12-31

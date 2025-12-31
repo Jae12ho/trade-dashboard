@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { DashboardData } from '../types/indicators';
+import { GeminiModelName, DEFAULT_GEMINI_MODEL } from '../constants/gemini-models';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -13,9 +14,10 @@ export interface MarketPrediction {
 }
 
 export async function generateMarketPrediction(
-  dashboardData: DashboardData
+  dashboardData: DashboardData,
+  modelName: GeminiModelName = DEFAULT_GEMINI_MODEL
 ): Promise<MarketPrediction> {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   const {
     us10yYield,

@@ -82,3 +82,6 @@ export interface CoinGeckoSimplePrice {
 export interface CoinGeckoMarketChart {
   prices: [number, number][]; // [timestamp, price]
 }
+
+// Re-export GeminiModelName from central constants file
+export type { GeminiModelName } from '../constants/gemini-models';
