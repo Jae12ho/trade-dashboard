@@ -23,6 +23,12 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
   - 월별 지표: 최근 12개월 데이터 시각화
   - 30일(또는 3개월) 변화율에 따른 색상 구분 (상승=녹색, 하락=빨간색)
 
+- 📰 **실시간 금융 뉴스 통합**
+  - Finnhub API를 통한 최근 24시간 금융 뉴스 자동 수집
+  - 최대 10개 주요 기사 (Reuters, Bloomberg 등)
+  - Redis 기반 10분 캐싱으로 신선한 뉴스 제공
+  - AI 분석에 뉴스 컨텍스트 자동 반영 (UI에는 미표시)
+
 - 🤖 **AI 기반 시장 분석**
   - **모델 선택 기능**: 3개의 Google Gemini 모델 중 선택 가능
     - gemini-2.5-flash (기본값, 균형잡힌 성능)
@@ -32,6 +38,7 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
   - API 할당량 초과 시 다른 모델로 즉시 전환 가능
   - Upstash Redis 기반 24시간 영구 캐싱 (모델별 독립 캐시)
   - 서버리스 환경에서 모든 인스턴스 간 캐시 공유
+  - **뉴스 기반 분석**: 실시간 금융 뉴스를 반영한 시장 전망 (연준 정책, 기업 실적, 지정학적 이슈 등)
   - 한국어로 제공되는 시장 전망 및 리스크 분석
   - 강세(Bullish) / 약세(Bearish) / 중립(Neutral) 심리 분석
   - **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시된 분석 자동 제공 (프로덕션 환경에서 안정적으로 작동)
@@ -55,6 +62,7 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
 - **FRED API** - 미국 연방준비은행 경제 데이터
 - **Yahoo Finance API** - 금융 시장 데이터
 - **CoinGecko API** - 암호화폐 시장 데이터
+- **Finnhub API** - 실시간 금융 뉴스
 - **Google Gemini API** - AI 기반 시장 분석
 
 ## 설치 및 실행
@@ -83,7 +91,10 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # FRED API (Federal Reserve Economic Data)
 FRED_API_KEY=your_fred_api_key_here
 
-# Upstash Redis (for persistent Gemini cache in serverless environment)
+# Finnhub API (Market News)
+FINNHUB_API_KEY=your_finnhub_api_key_here
+
+# Upstash Redis (for persistent caching in serverless environment)
 UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url_here
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token_here
 ```
@@ -91,6 +102,7 @@ UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token_here
 **API 키 발급 방법:**
 - **GEMINI_API_KEY**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 발급
 - **FRED_API_KEY**: [FRED API](https://fred.stlouisfed.org/docs/api/api_key.html)에서 무료 발급
+- **FINNHUB_API_KEY**: [Finnhub](https://finnhub.io)에서 무료 발급 (60 calls/min)
 - **UPSTASH_REDIS_REST_URL & TOKEN**:
   1. [Upstash Console](https://console.upstash.com)에서 계정 생성
   2. Redis 데이터베이스 생성 (Global, 무료 티어 사용 가능)
@@ -150,6 +162,8 @@ trade-dashboard/
 │   └── api/                      # API 라우트
 │       ├── indicators/
 │       │   └── route.ts          # 9개 지표 데이터 API
+│       ├── news/
+│       │   └── route.ts          # 금융 뉴스 API
 │       └── ai-prediction/
 │           └── route.ts          # AI 시장 분석 API
 │
@@ -162,12 +176,15 @@ trade-dashboard/
 │
 ├── lib/                          # 유틸리티 및 API
 │   ├── types/
-│   │   └── indicators.ts         # TypeScript 타입 정의
+│   │   ├── indicators.ts         # TypeScript 타입 정의
+│   │   └── errors.ts             # 에러 타입 정의 (QuotaError)
 │   ├── api/
 │   │   ├── indicators.ts         # 외부 API 연동 함수
+│   │   ├── news.ts               # Finnhub 뉴스 API 연동
 │   │   └── gemini.ts             # Gemini AI API 연동
 │   ├── cache/
-│   │   └── gemini-cache-redis.ts # Upstash Redis 캐시 (24h TTL, 모델별 분리)
+│   │   ├── gemini-cache-redis.ts # Upstash Redis 캐시 (24h TTL, 모델별 분리)
+│   │   └── news-cache-redis.ts   # 뉴스 캐시 (1h TTL)
 │   └── constants/
 │       └── gemini-models.ts      # Gemini 모델 설정 (중앙 관리)
 │
@@ -202,12 +219,14 @@ npm run lint
 │  클라이언트 (브라우저)                                       │
 │  Dashboard 컴포넌트                                       │
 │  ├─ /api/indicators 호출 (5분마다)                         │
+│  ├─ /api/news 호출 (5분마다)                              │
 │  └─ /api/ai-prediction 호출                              │
 └─────────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────┐
 │  Next.js API Routes (서버)                               │
 │  ├─ getAllIndicators() - 9개 지표 병렬 조회                 │
+│  ├─ getLatestNews() - 최근 24시간 뉴스 조회                 │
 │  └─ generateMarketPrediction() - AI 분석 생성             │
 └─────────────────────────────────────────────────────────┘
                         ↓
@@ -216,6 +235,7 @@ npm run lint
 │  ├─ FRED API (매크로 지표)                                 │
 │  ├─ Yahoo Finance API (자산 가격)                         │
 │  ├─ CoinGecko API (암호화폐)                              │
+│  ├─ Finnhub API (금융 뉴스)                               │
 │  └─ Google Gemini API (AI 분석)                          │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -225,6 +245,7 @@ npm run lint
 ### 외부 API 캐싱
 - **지표 데이터**: Next.js ISR 5분 캐싱 (`revalidate: 300`)
 - **히스토리 데이터**: 1시간 캐싱 (변동이 적은 과거 데이터)
+- **뉴스 데이터**: Upstash Redis 10분 캐싱 + Next.js ISR 10분 (신선도와 효율성 균형)
 - **API 라우트**: 강제 동적 렌더링 (`dynamic = 'force-dynamic'`)
 - **클라이언트 폴링**: 5분마다 자동 새로고침
 
@@ -360,10 +381,13 @@ API 할당량 초과 시, 단순히 최신 캐시를 반환하는 대신 **현�
 
 ### AI 분석 (한국어)
 
-Google Gemini API를 활용하여 9개 지표를 종합 분석:
+Google Gemini API를 활용하여 9개 지표와 최신 뉴스를 종합 분석:
+- **뉴스 기반 분석**: 최근 24시간 금융 뉴스를 AI 프롬프트에 포함하여 실시간 시장 이벤트 반영
+  - 연준 정책 발표, 기업 실적, 지정학적 이슈 등 실제 뉴스를 바탕으로 한 분석
+  - 뉴스 출처 명시 (Reuters, Bloomberg 등 실제 출처 인용)
 - **심리 분석**: 강세(Bullish), 약세(Bearish), 중립(Neutral)
-- **분석 내용**: 시장 상황에 대한 3-4문장 요약 (한국어)
-- **리스크**: 주요 위험 요소 3-4개 나열
+- **분석 내용**: 시장 상황에 대한 2-3문장 요약 (한국어, 뉴스 기반 인사이트 포함)
+- **리스크**: 주요 위험 요소 3-4개 나열 (뉴스 이벤트와 지표 연계)
 - **캐싱**: 동일한 지표 값 + 동일한 모델에 대해 24시간 캐시 재사용 (일별 데이터 주기에 맞춤)
 - **Fallback 메커니즘 (Hybrid Min-Max 유사도)**:
   - API 한도 초과 시 **현재 지표와 가장 유사한** 24시간 내 **동일 모델** 캐시 자동 선택

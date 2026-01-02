@@ -215,7 +215,7 @@ To add a new indicator, follow this pattern:
 - Auth: URL query param `?token=XXX`
 - Response: Array of `{ headline, summary, datetime, source, url, ... }`
 - Free tier: 60 calls/min, unlimited monthly
-- Cache: 1-hour Redis + ISR
+- Cache: 10-minute Redis + ISR (balances freshness and efficiency)
 - Filter: Last 24 hours, max 10 articles
 - **Integration**: News data included in Gemini AI prompt (not displayed in UI)
 - **Purpose**: Enhance AI analysis with real-world market context

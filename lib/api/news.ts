@@ -14,7 +14,7 @@ async function fetchFinnhubNews(category: string = 'general'): Promise<NewsArtic
 
   try {
     const response = await fetch(url, {
-      next: { revalidate: 3600 }, // 1시간 ISR
+      next: { revalidate: 600 }, // 10분 ISR
     });
 
     if (!response.ok) {
