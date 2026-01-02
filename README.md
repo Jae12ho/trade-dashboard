@@ -129,7 +129,7 @@ npm run start
 | 지표 | 설명 | 데이터 출처 | API 심볼 | 데이터 빈도 |
 |------|------|-------------|----------|-------------|
 | Crude Oil (WTI) | 서부 텍사스유 현물 가격 | Yahoo Finance | CL=F | 일별 |
-| Copper/Gold Ratio | 구리/금 비율 (×100) | Yahoo Finance | HG=F / GC=F | 일별 |
+| Copper/Gold Ratio | 구리/금 비율 (×10000) | Yahoo Finance | HG=F / GC=F | 일별 |
 | Bitcoin (BTC/USD) | 비트코인 가격 | CoinGecko | bitcoin | 일별 (24/7) |
 
 ### 📊 시장 심리 지표 (2개)

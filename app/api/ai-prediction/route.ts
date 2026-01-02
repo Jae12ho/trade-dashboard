@@ -1,23 +1,26 @@
 import { NextResponse } from 'next/server';
 import { generateMarketPrediction } from '@/lib/api/gemini';
 import { geminiCache } from '@/lib/cache/gemini-cache-redis';
-import { DashboardData } from '@/lib/types/indicators';
+import { DashboardData, NewsData } from '@/lib/types/indicators';
 import {
   GeminiModelName,
   DEFAULT_GEMINI_MODEL,
   VALID_MODEL_NAMES
 } from '@/lib/constants/gemini-models';
+import { isQuotaError } from '@/lib/types/errors';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  // Get dashboard data and model from request body (sent by client)
+  // Get dashboard data, news data, and model from request body (sent by client)
   let dashboardData: DashboardData;
+  let newsData: NewsData | undefined;
   let modelName: GeminiModelName = DEFAULT_GEMINI_MODEL;
 
   try {
     const body = await request.json();
     dashboardData = body.dashboardData || body;
+    newsData = body.newsData;
     modelName = body.modelName || DEFAULT_GEMINI_MODEL;
 
     // Validate model name
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
 
     // Cache miss - generate new prediction
     console.log(`[API] Cache miss - generating new Gemini prediction (model: ${modelName})`);
-    const prediction = await generateMarketPrediction(dashboardData, modelName);
+    const prediction = await generateMarketPrediction(dashboardData, newsData, modelName);
 
     // Store in cache
     await geminiCache.setPrediction(dashboardData, prediction, modelName);
@@ -58,11 +61,11 @@ export async function POST(request: Request) {
     console.error('Error generating AI prediction:', error);
 
     // Check if it's a quota/rate limit error
-    const isQuotaError = error instanceof Error && (error as any).isQuotaError === true;
+    const isQuota = isQuotaError(error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // If quota error, try to use similarity-based fallback cache
-    if (isQuotaError) {
+    if (isQuota) {
       const fallbackPrediction = await geminiCache.getBestMatchingPrediction(
         dashboardData,
         modelName
@@ -80,11 +83,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: isQuotaError ? 'quota_exceeded' : 'prediction_failed',
+        error: isQuota ? 'quota_exceeded' : 'prediction_failed',
         message: errorMessage,
-        isQuotaError,
+        isQuotaError: isQuota,
       },
-      { status: isQuotaError ? 429 : 500 }
+      { status: isQuota ? 429 : 500 }
     );
   }
 }

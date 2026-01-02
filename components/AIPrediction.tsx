@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { MarketPrediction } from '@/lib/api/gemini';
-import { DashboardData } from '@/lib/types/indicators';
+import { DashboardData, NewsData } from '@/lib/types/indicators';
 import {
   GEMINI_MODELS,
   GeminiModelName,
@@ -13,17 +13,36 @@ const STORAGE_KEY = 'gemini-model-preference';
 
 interface AIPredictionProps {
   dashboardData: DashboardData;
+  newsData: NewsData | null;
 }
 
-export default function AIPrediction({ dashboardData }: AIPredictionProps) {
+export default function AIPrediction({ dashboardData, newsData }: AIPredictionProps) {
   const [prediction, setPrediction] = useState<MarketPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dots, setDots] = useState(1);
-  const [selectedModel, setSelectedModel] = useState<GeminiModelName>(DEFAULT_GEMINI_MODEL);
+  const [selectedModel, setSelectedModel] = useState<GeminiModelName>(() => {
+    // Load initial model from localStorage (runs only once)
+    if (typeof window === 'undefined') {
+      return DEFAULT_GEMINI_MODEL;
+    }
+
+    try {
+      const savedModel = localStorage.getItem(STORAGE_KEY) as GeminiModelName | null;
+      if (savedModel && GEMINI_MODELS.some(m => m.value === savedModel)) {
+        console.log(`[AIPrediction] Loaded model from localStorage: ${savedModel}`);
+        return savedModel;
+      }
+    } catch (error) {
+      console.warn('localStorage not available:', error);
+    }
+
+    console.log(`[AIPrediction] Using default model: ${DEFAULT_GEMINI_MODEL}`);
+    return DEFAULT_GEMINI_MODEL;
+  });
   const isInitialMount = useRef(true);
 
-  const fetchPrediction = async (modelOverride?: GeminiModelName) => {
+  const fetchPrediction = useCallback(async (modelOverride?: GeminiModelName) => {
     const modelToUse = modelOverride || selectedModel;
 
     try {
@@ -39,6 +58,7 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
         },
         body: JSON.stringify({
           dashboardData,
+          newsData,
           modelName: modelToUse,
         }),
       });
@@ -61,59 +81,28 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dashboardData, newsData, selectedModel]);
 
-  // Load model preference from localStorage on mount and fetch prediction
+  // Fetch prediction when model or newsData changes (including initial mount)
   useEffect(() => {
-    let modelToUse = DEFAULT_GEMINI_MODEL;
-
-    try {
-      if (typeof window !== 'undefined') {
-        const savedModel = localStorage.getItem(STORAGE_KEY) as GeminiModelName | null;
-        if (savedModel && GEMINI_MODELS.some(m => m.value === savedModel)) {
-          console.log(`[AIPrediction] Loaded model from localStorage: ${savedModel}`);
-          modelToUse = savedModel;
-          setSelectedModel(savedModel);
-        } else {
-          console.log(`[AIPrediction] No valid saved model, using default: ${DEFAULT_GEMINI_MODEL}`);
+    // Save model to localStorage (skip on initial mount)
+    if (!isInitialMount.current) {
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, selectedModel);
+          console.log(`[AIPrediction] Saved model to localStorage: ${selectedModel}`);
         }
+      } catch (error) {
+        console.warn('localStorage not available:', error);
       }
-    } catch (error) {
-      console.warn('localStorage not available:', error);
-    }
-
-    // Fetch initial prediction with the determined model
-    console.log(`[AIPrediction] Initial fetch with model: ${modelToUse}`);
-    fetchPrediction(modelToUse);  // Pass the model directly!
-  }, []);
-
-  // Save to localStorage when model changes (skip initial mount)
-  useEffect(() => {
-    if (isInitialMount.current) {
+    } else {
       isInitialMount.current = false;
-      return;
     }
 
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, selectedModel);
-        console.log(`[AIPrediction] Saved model to localStorage: ${selectedModel}`);
-      }
-    } catch (error) {
-      console.warn('localStorage not available:', error);
-    }
-  }, [selectedModel]);
-
-  // Fetch prediction when model changes (after initial mount)
-  useEffect(() => {
-    // Only fetch after localStorage is loaded
-    if (isInitialMount.current) {
-      return;
-    }
-
+    // Fetch prediction (always, including initial mount)
     console.log(`[AIPrediction] Fetching prediction with model: ${selectedModel}`);
     fetchPrediction();
-  }, [selectedModel]);
+  }, [selectedModel, newsData, fetchPrediction]);
 
   // 점(...) 애니메이션 효과
   useEffect(() => {

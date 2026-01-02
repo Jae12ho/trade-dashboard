@@ -310,7 +310,7 @@ export async function getM2MoneySupply(): Promise<IndicatorData> {
 
 export async function getCrudeOil(): Promise<IndicatorData> {
   try {
-    const { current, previous, history } = await fetchYahooFinanceData('CL=F');
+    const { current, history } = await fetchYahooFinanceData('CL=F');
 
     // 1-day change (entry-based: last trading day)
     const { change, changePercent } = calculatePeriodChange(current, history, 1);
@@ -491,7 +491,7 @@ export async function getPMI(): Promise<IndicatorData> {
     // ISM PMI removed from FRED in 2016, DBnomics has corrupted data (showing 10 vs actual ~48)
     // BSCICP02USM460S is OECD Manufacturing Confidence Indicator for US
     // This is monthly data, so we use 1M, 2M, 3M periods instead of 1D, 7D, 30D
-    const { current, previous, history } = await fetchFREDData('BSCICP02USM460S', 60);
+    const { current, history } = await fetchFREDData('BSCICP02USM460S', 60);
 
     // 1-month change (use as "1D" field for consistency)
     const { change, changePercent } = calculatePeriodChange(current, history, 1);
@@ -530,7 +530,7 @@ export async function getPutCallRatio(): Promise<IndicatorData> {
     // Current P/C data requires paid CBOE DataShop subscription
     // VIX (fear index) serves as good sentiment indicator alternative
     // High VIX (~30+) = high fear/put buying, Low VIX (~15-) = low fear/call buying
-    const { current, previous, history } = await fetchYahooFinanceData('^VIX');
+    const { current, history } = await fetchYahooFinanceData('^VIX');
 
     // 1-day change (entry-based: last trading day)
     const { change, changePercent } = calculatePeriodChange(current, history, 1);

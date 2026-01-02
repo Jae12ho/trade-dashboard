@@ -39,6 +39,7 @@ GEMINI_API_KEY=<your-key>              # https://makersuite.google.com/app/apike
 FRED_API_KEY=<your-key>                # https://fred.stlouisfed.org/docs/api/api_key.html
 UPSTASH_REDIS_REST_URL=<your-url>      # https://console.upstash.com (Redis database)
 UPSTASH_REDIS_REST_TOKEN=<your-token>  # REST API credentials from Upstash
+FINNHUB_API_KEY=<your-key>             # https://finnhub.io (Market News)
 ```
 
 Yahoo Finance and CoinGecko APIs require no authentication.
@@ -115,7 +116,7 @@ IndicatorCard + MiniChart components
 
 **Commodity & Asset Indicators (3):**
 5. Crude Oil (WTI) - Yahoo Finance: `CL=F`
-6. Copper/Gold Ratio - Yahoo Finance calculated: `HG=F / GC=F × 100`
+6. Copper/Gold Ratio - Yahoo Finance calculated: `HG=F / GC=F × 10000`
 7. Bitcoin (BTC/USD) - CoinGecko: `bitcoin`
 
 **Market Sentiment Indicators (2):**
@@ -208,6 +209,16 @@ To add a new indicator, follow this pattern:
 - Auth: None required
 - Cache: Current 5-min, historical 1-hour
 - Calculate `previous` from `current / (1 + usd_24h_change / 100)`
+
+### Finnhub API
+- Market News: `https://finnhub.io/api/v1/news?category=general&token={API_KEY}`
+- Auth: URL query param `?token=XXX`
+- Response: Array of `{ headline, summary, datetime, source, url, ... }`
+- Free tier: 60 calls/min, unlimited monthly
+- Cache: 1-hour Redis + ISR
+- Filter: Last 24 hours, max 10 articles
+- **Integration**: News data included in Gemini AI prompt (not displayed in UI)
+- **Purpose**: Enhance AI analysis with real-world market context
 
 ### Google Gemini API
 - Model: `gemini-2.5-flash`
@@ -416,6 +427,6 @@ See `/ai/PLAN.md` for detailed development plans:
 2. **A/D Line removed**: NYSE Advance-Decline Line not available via free APIs
 3. **PMI data**: Uses OECD Manufacturing Confidence instead of ISM PMI (DBnomics data was corrupted)
 4. **Put/Call Ratio**: VIX used as proxy (CBOE data requires paid subscription)
-5. **Copper/Gold display**: Multiplied by 100 for readability (0.124 instead of 0.001238)
+5. **Copper/Gold display**: Multiplied by 10000 for readability (1.24 instead of 0.000124)
 6. **Negative value percentages**: M2 and MFG can have negative base values; `Math.abs(pastValue)` used in denominator to ensure correct sign
 7. **Cache persistence**: Gemini cache uses Upstash Redis; persists across deployments and serverless cold starts with 24h TTL

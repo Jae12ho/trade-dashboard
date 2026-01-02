@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DashboardData } from '@/lib/types/indicators';
+import { DashboardData, NewsData } from '@/lib/types/indicators';
 import IndicatorCard from './IndicatorCard';
 import AIPrediction from './AIPrediction';
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [newsData, setNewsData] = useState<NewsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,14 +16,29 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/indicators');
+      // 지표와 뉴스를 병렬로 fetch
+      const [indicatorsRes, newsRes] = await Promise.all([
+        fetch('/api/indicators'),
+        fetch('/api/news'),
+      ]);
 
-      if (!response.ok) {
+      if (!indicatorsRes.ok) {
         throw new Error('Failed to fetch indicators');
       }
 
-      const dashboardData: DashboardData = await response.json();
+      const dashboardData: DashboardData = await indicatorsRes.json();
       setData(dashboardData);
+
+      // 뉴스는 실패해도 계속 진행 (optional)
+      if (newsRes.ok) {
+        const newsDataJson: NewsData = await newsRes.json();
+        setNewsData(newsDataJson);
+        console.log(`[Dashboard] Fetched ${newsDataJson.articles.length} news articles`);
+      } else {
+        console.warn('[Dashboard] Failed to fetch news, continuing without news');
+        setNewsData(null);
+      }
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -105,7 +121,7 @@ export default function Dashboard() {
         <IndicatorCard indicator={data.indicators.bitcoin} />
       </div>
 
-      <AIPrediction dashboardData={data} />
+      <AIPrediction dashboardData={data} newsData={newsData} />
 
       {loading && (
         <div className="mt-4 text-center">
