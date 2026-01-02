@@ -120,7 +120,7 @@ ${newsSection}
 Respond ONLY with the following JSON format:
 {
   "sentiment": "bullish" | "bearish" | "neutral",
-  "reasoning": "2-3 sentences of analysis with specific news references",
+  "reasoning": "4-5 sentences of analysis with specific news references",
   "risks": ["risk 1", "risk 2", "risk 3"]
 }
 
