@@ -168,7 +168,7 @@ When evaluating news articles, classify them:
 Respond ONLY with the following JSON format:
 {
   "sentiment": "bullish" | "bearish" | "neutral",
-  "reasoning": "4-5 sentences of analysis with specific news references",
+  "reasoning": "5-6 sentences of analysis with specific news references",
   "risks": ["risk 1", "risk 2", "risk 3"]
 }
 
