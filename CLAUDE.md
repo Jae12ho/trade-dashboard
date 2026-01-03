@@ -39,7 +39,6 @@ GEMINI_API_KEY=<your-key>              # https://makersuite.google.com/app/apike
 FRED_API_KEY=<your-key>                # https://fred.stlouisfed.org/docs/api/api_key.html
 UPSTASH_REDIS_REST_URL=<your-url>      # https://console.upstash.com (Redis database)
 UPSTASH_REDIS_REST_TOKEN=<your-token>  # REST API credentials from Upstash
-FINNHUB_API_KEY=<your-key>             # https://finnhub.io (Market News)
 ```
 
 Yahoo Finance and CoinGecko APIs require no authentication.
@@ -210,18 +209,10 @@ To add a new indicator, follow this pattern:
 - Cache: Current 5-min, historical 1-hour
 - Calculate `previous` from `current / (1 + usd_24h_change / 100)`
 
-### Finnhub API
-- Market News: `https://finnhub.io/api/v1/news?category=general&token={API_KEY}`
-- Auth: URL query param `?token=XXX`
-- Response: Array of `{ headline, summary, datetime, source, url, ... }`
-- Free tier: 60 calls/min, unlimited monthly
-- Cache: 10-minute Redis + ISR (balances freshness and efficiency)
-- Filter: Last 24 hours, max 10 articles
-- **Integration**: News data included in Gemini AI prompt (not displayed in UI)
-- **Purpose**: Enhance AI analysis with real-world market context
-
 ### Google Gemini API
+- SDK: `@google/genai` (new unified SDK)
 - Model: `gemini-2.5-flash`
+- **Google Search Integration**: AI automatically searches for official announcements (Fed, Trump, economic data)
 - Response language: Korean (specified in prompt)
 - Output format: JSON with `{ sentiment, reasoning, risks }`
 - Parse response: Extract JSON via regex `/{[\s\S]*}/`

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateMarketPrediction } from '@/lib/api/gemini';
 import { geminiCache } from '@/lib/cache/gemini-cache-redis';
-import { DashboardData, NewsData } from '@/lib/types/indicators';
+import { DashboardData } from '@/lib/types/indicators';
 import {
   GeminiModelName,
   DEFAULT_GEMINI_MODEL,
@@ -12,15 +12,13 @@ import { isQuotaError } from '@/lib/types/errors';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  // Get dashboard data, news data, and model from request body (sent by client)
+  // Get dashboard data and model from request body (sent by client)
   let dashboardData: DashboardData;
-  let newsData: NewsData | undefined;
   let modelName: GeminiModelName = DEFAULT_GEMINI_MODEL;
 
   try {
     const body = await request.json();
     dashboardData = body.dashboardData || body;
-    newsData = body.newsData;
     modelName = body.modelName || DEFAULT_GEMINI_MODEL;
 
     // Validate model name
@@ -51,7 +49,7 @@ export async function POST(request: Request) {
 
     // Cache miss - generate new prediction
     console.log(`[API] Cache miss - generating new Gemini prediction (model: ${modelName})`);
-    const prediction = await generateMarketPrediction(dashboardData, newsData, modelName);
+    const prediction = await generateMarketPrediction(dashboardData, modelName);
 
     // Store in cache
     await geminiCache.setPrediction(dashboardData, prediction, modelName);

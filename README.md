@@ -23,25 +23,28 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
   - 월별 지표: 최근 12개월 데이터 시각화
   - 30일(또는 3개월) 변화율에 따른 색상 구분 (상승=녹색, 하락=빨간색)
 
-- 📰 **실시간 금융 뉴스 통합**
-  - Finnhub API를 통한 최근 24시간 금융 뉴스 자동 수집
-  - 최대 10개 주요 기사 (Reuters, Bloomberg 등)
-  - Redis 기반 10분 캐싱으로 신선한 뉴스 제공
-  - AI 분석에 뉴스 컨텍스트 자동 반영 (UI에는 미표시)
-
-- 🤖 **AI 기반 시장 분석**
+- 🤖 **AI 기반 시장 분석** (고도화된 프롬프트 엔지니어링 적용)
+  - **SDK**: `@google/genai` v1.34.0 (새로운 통합 SDK)
   - **모델 선택 기능**: 3개의 Google Gemini 모델 중 선택 가능
     - gemini-2.5-flash (기본값, 균형잡힌 성능)
     - gemini-2.5-flash-lite (빠른 응답)
     - gemini-2.5-pro (고급 분석)
+  - **Google Search 통합**: AI가 실시간으로 공식 발표를 검색
+    - Fed 정책 발표, FOMC 결정, 금리 변경
+    - 트럼프 정책 성명, 행정 명령, 무역 정책
+    - 공식 경제 지표 발표 (CPI, PPI, 실업률, GDP, NFP)
+  - **3-Tier 가중치 분석 시스템**:
+    - PRIMARY (70%): 9개 경제 지표의 다기간 트렌드 분석
+    - SECONDARY (25%): 공식 발표 (Fed, 정부, 경제 데이터)
+    - TERTIARY (5%): 시장 논평 및 애널리스트 의견
+  - **뉴스 분류 시스템**: 공식 발표 vs 개인 의견 자동 구분
   - localStorage 기반 모델 선택 지속성 (페이지 새로고침 후에도 유지)
   - API 할당량 초과 시 다른 모델로 즉시 전환 가능
   - Upstash Redis 기반 24시간 영구 캐싱 (모델별 독립 캐시)
   - 서버리스 환경에서 모든 인스턴스 간 캐시 공유
-  - **뉴스 기반 분석**: 실시간 금융 뉴스를 반영한 시장 전망 (연준 정책, 기업 실적, 지정학적 이슈 등)
   - 한국어로 제공되는 시장 전망 및 리스크 분석
   - 강세(Bullish) / 약세(Bearish) / 중립(Neutral) 심리 분석
-  - **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시된 분석 자동 제공 (프로덕션 환경에서 안정적으로 작동)
+  - **Fallback 메커니즘**: API 한도 초과 시 최근 24시간 내 캐시된 분석 자동 제공
   - 실시간 Refresh 버튼으로 수동 갱신 가능
 
 - 🌓 **다크 모드 지원**
@@ -58,12 +61,14 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
 
 ### Backend & APIs
 - **Next.js API Routes** - 서버사이드 API 엔드포인트
-- **Upstash Redis** - 서버리스 최적화된 영구 캐시 저장소
+- **Upstash Redis** - 서버리스 최적화된 영구 캐시 저장소 (Gemini 분석 24h 캐싱)
 - **FRED API** - 미국 연방준비은행 경제 데이터
 - **Yahoo Finance API** - 금융 시장 데이터
 - **CoinGecko API** - 암호화폐 시장 데이터
-- **Finnhub API** - 실시간 금융 뉴스
-- **Google Gemini API** - AI 기반 시장 분석
+- **Google Gemini API** (`@google/genai` v1.34.0)
+  - AI 기반 시장 분석 with Google Search 통합
+  - Interactions API를 통한 도구 실행 (google_search)
+  - 3-Tier 가중치 프롬프트 엔지니어링 적용
 
 ## 설치 및 실행
 
@@ -91,9 +96,6 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # FRED API (Federal Reserve Economic Data)
 FRED_API_KEY=your_fred_api_key_here
 
-# Finnhub API (Market News)
-FINNHUB_API_KEY=your_finnhub_api_key_here
-
 # Upstash Redis (for persistent caching in serverless environment)
 UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url_here
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token_here
@@ -102,7 +104,6 @@ UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token_here
 **API 키 발급 방법:**
 - **GEMINI_API_KEY**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 발급
 - **FRED_API_KEY**: [FRED API](https://fred.stlouisfed.org/docs/api/api_key.html)에서 무료 발급
-- **FINNHUB_API_KEY**: [Finnhub](https://finnhub.io)에서 무료 발급 (60 calls/min)
 - **UPSTASH_REDIS_REST_URL & TOKEN**:
   1. [Upstash Console](https://console.upstash.com)에서 계정 생성
   2. Redis 데이터베이스 생성 (Global, 무료 티어 사용 가능)
@@ -162,10 +163,8 @@ trade-dashboard/
 │   └── api/                      # API 라우트
 │       ├── indicators/
 │       │   └── route.ts          # 9개 지표 데이터 API
-│       ├── news/
-│       │   └── route.ts          # 금융 뉴스 API
 │       └── ai-prediction/
-│           └── route.ts          # AI 시장 분석 API
+│           └── route.ts          # AI 시장 분석 API (Google Search 포함)
 │
 ├── components/                   # React 컴포넌트
 │   ├── Dashboard.tsx             # 메인 대시보드 컴포넌트
@@ -180,11 +179,9 @@ trade-dashboard/
 │   │   └── errors.ts             # 에러 타입 정의 (QuotaError)
 │   ├── api/
 │   │   ├── indicators.ts         # 외부 API 연동 함수
-│   │   ├── news.ts               # Finnhub 뉴스 API 연동
-│   │   └── gemini.ts             # Gemini AI API 연동
+│   │   └── gemini.ts             # Gemini AI API 연동 (Google Search 포함)
 │   ├── cache/
-│   │   ├── gemini-cache-redis.ts # Upstash Redis 캐시 (24h TTL, 모델별 분리)
-│   │   └── news-cache-redis.ts   # 뉴스 캐시 (1h TTL)
+│   │   └── gemini-cache-redis.ts # Upstash Redis 캐시 (24h TTL, 모델별 분리)
 │   └── constants/
 │       └── gemini-models.ts      # Gemini 모델 설정 (중앙 관리)
 │
@@ -219,15 +216,13 @@ npm run lint
 │  클라이언트 (브라우저)                                       │
 │  Dashboard 컴포넌트                                       │
 │  ├─ /api/indicators 호출 (5분마다)                         │
-│  ├─ /api/news 호출 (5분마다)                              │
 │  └─ /api/ai-prediction 호출                              │
 └─────────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────┐
 │  Next.js API Routes (서버)                               │
 │  ├─ getAllIndicators() - 9개 지표 병렬 조회                 │
-│  ├─ getLatestNews() - 최근 24시간 뉴스 조회                 │
-│  └─ generateMarketPrediction() - AI 분석 생성             │
+│  └─ generateMarketPrediction() - AI 분석 (Google Search 자동 실행) │
 └─────────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────────┐
@@ -235,8 +230,7 @@ npm run lint
 │  ├─ FRED API (매크로 지표)                                 │
 │  ├─ Yahoo Finance API (자산 가격)                         │
 │  ├─ CoinGecko API (암호화폐)                              │
-│  ├─ Finnhub API (금융 뉴스)                               │
-│  └─ Google Gemini API (AI 분석)                          │
+│  └─ Google Gemini API (AI 분석 + Google Search)          │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -245,7 +239,6 @@ npm run lint
 ### 외부 API 캐싱
 - **지표 데이터**: Next.js ISR 5분 캐싱 (`revalidate: 300`)
 - **히스토리 데이터**: 1시간 캐싱 (변동이 적은 과거 데이터)
-- **뉴스 데이터**: Upstash Redis 10분 캐싱 + Next.js ISR 10분 (신선도와 효율성 균형)
 - **API 라우트**: 강제 동적 렌더링 (`dynamic = 'force-dynamic'`)
 - **클라이언트 폴링**: 5분마다 자동 새로고침
 
@@ -269,6 +262,135 @@ npm run lint
   - **가중치**: 유사도 90% + 최신성 10% (지표 유사성 우선)
   - 9개 지표 모두 유클리드 거리 기반 종합 평가
 - **무료 티어**: Upstash 무료 10,000 commands/day (월 300,000)
+
+## AI 프롬프트 엔지니어링
+
+이 프로젝트의 핵심은 **고도로 정교한 프롬프트 엔지니어링**을 통한 시장 분석 품질 향상입니다.
+
+### 설계 철학
+
+**문제 인식**: 일반적인 뉴스 피드는 개인 의견과 추측성 기사가 많아 AI 분석 품질을 저하시킴
+
+**해결 방안**:
+1. **지표 우선 분석** - 객관적 경제 데이터에 70% 가중치 부여
+2. **공식 발표 통합** - Google Search로 Fed, 정부 발표만 선별적 수집
+3. **의견 최소화** - 애널리스트 의견은 5%로 제한
+
+### 3-Tier 가중치 시스템
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  PRIMARY (70% weight): Economic Indicators              │
+│  ├─ 9개 지표의 다기간 트렌드 (1D/7D/30D, 1M/2M/3M)            │
+│  ├─ 크로스 지표 관계 분석 (수익률 vs 달러, VIX vs 주식)          │
+│  └─ 모멘텀, 추세 반전, 구조적 변화 식별                        │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  SECONDARY (25% weight): Official Announcements         │
+│  ├─ Fed 정책 성명, FOMC 결정, 금리 발표                       │
+│  ├─ 정치/정책 결정 (트럼프 성명, 행정 명령, 관세)                │
+│  ├─ 공식 경제 데이터 (CPI, PPI, 실업률, GDP, NFP)            │
+│  └─ 정부 재정/규제 정책 변화                                 │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  TERTIARY (5% weight): Market Commentary                │
+│  ├─ 개별 애널리스트 의견                                     │
+│  ├─ 시장 전망, 투자 추천                                    │
+│  └─ 일반 시장 논평 (공식 근거 없음)                           │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Google Search 통합
+
+AI가 분석 전 **자동으로 검색하는 항목**:
+
+```typescript
+// 필수 검색 (High Priority)
+- "Fed interest rate decision January 2026"
+- "Trump tariff announcement this week"
+- "US CPI inflation data latest"
+- "FOMC statement recent"
+
+// 검색 가이드라인
+1. 공식 발표 우선 (Fed, 정부, Trump)
+2. 최근 7일 이내 이벤트 집중
+3. 출처 신뢰도 검증 (Fed.gov, WhiteHouse.gov, BLS.gov, Reuters, Bloomberg)
+4. 애널리스트 의견 발견 시 → 5% 가중치로 처리
+5. 공식 발표 없을 시 → 지표 분석만으로 진행 (70% 가중치 증가)
+```
+
+### 뉴스 분류 시스템
+
+AI가 검색 결과를 자동으로 분류:
+
+**HIGH PRIORITY (25% 가중치):**
+- ✅ "Fed announces rate cut" → 공식 정책
+- ✅ "Trump imposes new tariffs on China" → 정치적 결정
+- ✅ "U.S. inflation hits 3.2%" → 공식 데이터
+
+**LOW PRIORITY (5% 가중치):**
+- ⚠️ "Analyst predicts market rally" → 개인 의견
+- ⚠️ "XYZ stock looks attractive" → 개인 견해
+- ⚠️ "Economist forecasts recession" → 예측
+
+**불확실할 경우**: 기본값 LOW PRIORITY (5%)
+
+### 분석 요구사항
+
+AI에게 지시하는 구체적 분석 방법론:
+
+1. **지표 기반 추론** (PRIMARY - 70%)
+   ```
+   항상 지표가 보여주는 것부터 시작
+   → 공식 발표로 맥락 추가
+   → 시장 논평은 간략히 언급 (관련성 있을 경우)
+   ```
+
+2. **공식 뉴스 통합** (SECONDARY - 25%)
+   ```
+   - 지표 움직임을 설명하기 위해 공식 발표 참조
+   - 인용 시 실제 내용과 출처 명시 (인덱스 번호 금지)
+   - 좋은 예: "연준의 긴축 기조 유지 발언(FOMC 성명서)에 따라..."
+   - 나쁜 예: "뉴스1에 따르면...", "(뉴스2)"
+   ```
+
+3. **논평 맥락화** (TERTIARY - 5%)
+   ```
+   - 애널리스트 의견은 부수적 맥락으로만 사용
+   - 의견이 핵심 분석을 주도하지 않도록 함
+   - 예: "일부 시장 참여자들의 낙관론에도 불구하고, 지표는..."
+   ```
+
+### 기술적 구현
+
+**SDK**: `@google/genai` v1.34.0 (통합 SDK)
+```typescript
+const interaction = await genAI.interactions.create({
+  model: 'gemini-2.5-flash',
+  input: prompt,  // 위 프롬프트 전략이 포함된 상세한 지시사항
+  tools: [{ type: 'google_search' }],  // Google Search 활성화
+  response_modalities: ['text'],
+});
+```
+
+**프롬프트 길이**: ~3,500 토큰 (지표 데이터 + 프롬프트 엔지니어링 지침)
+
+**출력 형식**: 구조화된 JSON
+```json
+{
+  "sentiment": "bullish" | "bearish" | "neutral",
+  "reasoning": "4-5 문장의 한국어 분석 (뉴스 참조 포함)",
+  "risks": ["리스크 1", "리스크 2", "리스크 3"]
+}
+```
+
+### 결과 및 효과
+
+사용자 테스트 결과:
+- ✅ **품질 향상**: 뉴스 피드 제거 후 분석 품질 개선 확인
+- ✅ **신뢰도**: Google Search를 통한 공식 출처 우선 수집
+- ✅ **일관성**: 지표 중심 분석으로 주관적 편향 최소화
+- ✅ **투명성**: 가중치 시스템으로 분석 근거 명확화
 
 ## 주요 특징
 

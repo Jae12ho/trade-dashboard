@@ -85,22 +85,3 @@ export interface CoinGeckoMarketChart {
 
 // Re-export GeminiModelName from central constants file
 export type { GeminiModelName } from '../constants/gemini-models';
-
-// Finnhub News Article 타입
-export interface NewsArticle {
-  category: string;          // "general news"
-  datetime: number;          // Unix timestamp
-  headline: string;
-  id: number;
-  image: string;
-  related: string;           // 관련 심볼
-  source: string;            // "Reuters", "SeekingAlpha", etc.
-  summary: string;
-  url: string;
-}
-
-export interface NewsData {
-  articles: NewsArticle[];   // 최대 10개
-  lastUpdated: string;       // ISO timestamp
-  source: 'cache' | 'api';   // 디버깅용
-}

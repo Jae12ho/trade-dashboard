@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { MarketPrediction } from '@/lib/api/gemini';
-import { DashboardData, NewsData } from '@/lib/types/indicators';
+import { DashboardData } from '@/lib/types/indicators';
 import {
   GEMINI_MODELS,
   GeminiModelName,
@@ -13,10 +13,9 @@ const STORAGE_KEY = 'gemini-model-preference';
 
 interface AIPredictionProps {
   dashboardData: DashboardData;
-  newsData: NewsData | null;
 }
 
-export default function AIPrediction({ dashboardData, newsData }: AIPredictionProps) {
+export default function AIPrediction({ dashboardData }: AIPredictionProps) {
   const [prediction, setPrediction] = useState<MarketPrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +57,6 @@ export default function AIPrediction({ dashboardData, newsData }: AIPredictionPr
         },
         body: JSON.stringify({
           dashboardData,
-          newsData,
           modelName: modelToUse,
         }),
       });
@@ -81,9 +79,9 @@ export default function AIPrediction({ dashboardData, newsData }: AIPredictionPr
     } finally {
       setLoading(false);
     }
-  }, [dashboardData, newsData, selectedModel]);
+  }, [dashboardData, selectedModel]);
 
-  // Fetch prediction when model or newsData changes (including initial mount)
+  // Fetch prediction when model changes (including initial mount)
   useEffect(() => {
     // Save model to localStorage (skip on initial mount)
     if (!isInitialMount.current) {
@@ -102,7 +100,7 @@ export default function AIPrediction({ dashboardData, newsData }: AIPredictionPr
     // Fetch prediction (always, including initial mount)
     console.log(`[AIPrediction] Fetching prediction with model: ${selectedModel}`);
     fetchPrediction();
-  }, [selectedModel, newsData, fetchPrediction]);
+  }, [selectedModel, fetchPrediction]);
 
   // 점(...) 애니메이션 효과
   useEffect(() => {
