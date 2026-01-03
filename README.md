@@ -24,11 +24,11 @@ Trade Dashboard는 9개의 핵심 경제 지표를 실시간으로 모니터링�
   - 30일(또는 3개월) 변화율에 따른 색상 구분 (상승=녹색, 하락=빨간색)
 
 - 🤖 **AI 기반 시장 분석** (고도화된 프롬프트 엔지니어링 적용)
-  - **SDK**: `@google/genai` v1.34.0 (새로운 통합 SDK)
+  - **SDK**: `@google/genai` v1.34.0
   - **모델 선택 기능**: 3개의 Google Gemini 모델 중 선택 가능
     - gemini-2.5-flash (기본값, 균형잡힌 성능)
     - gemini-2.5-flash-lite (빠른 응답)
-    - gemini-2.5-pro (고급 분석)
+    - 기타 모델
   - **Google Search 통합**: AI가 실시간으로 공식 발표를 검색
     - Fed 정책 발표, FOMC 결정, 금리 변경
     - 트럼프 정책 성명, 행정 명령, 무역 정책
