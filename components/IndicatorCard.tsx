@@ -3,9 +3,10 @@ import MiniChart from './MiniChart';
 
 interface IndicatorCardProps {
   indicator: IndicatorData;
+  isLoadingComments?: boolean;
 }
 
-export default function IndicatorCard({ indicator }: IndicatorCardProps) {
+export default function IndicatorCard({ indicator, isLoadingComments = false }: IndicatorCardProps) {
   const getChangeColor = (change: number) => {
     return change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
   };
@@ -124,6 +125,37 @@ export default function IndicatorCard({ indicator }: IndicatorCardProps) {
               }
               isPositive={indicator.change30d !== undefined ? indicator.change30d >= 0 : indicator.change >= 0}
             />
+
+            {/* AI Comment - 차트 바로 아래에 배치 */}
+            {isLoadingComments && !indicator.aiComment ? (
+              <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-800">
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold shrink-0">
+                    AI 분석
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-4 h-4 bg-purple-600 dark:bg-purple-400 rounded-full"
+                      style={{ animation: 'wiggle 2s ease-in-out infinite' }}
+                    ></div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      분석 중...
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : indicator.aiComment ? (
+              <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-800">
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold shrink-0">
+                    AI 분석
+                  </span>
+                  <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed">
+                    {indicator.aiComment}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
 

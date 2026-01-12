@@ -23,6 +23,9 @@ export interface IndicatorData {
   lastUpdated: string;
   unit?: string;
   history?: HistoricalDataPoint[];
+
+  // AI-generated comment (2-3 sentences)
+  aiComment?: string;
 }
 
 export interface DashboardData {

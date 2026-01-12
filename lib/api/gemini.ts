@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { DashboardData } from '../types/indicators';
+import { DashboardData, IndicatorData } from '../types/indicators';
 import { GeminiModelName, DEFAULT_GEMINI_MODEL } from '../constants/gemini-models';
 import { createQuotaError } from '../types/errors';
 
@@ -220,6 +220,141 @@ CRITICAL: The "reasoning" and "risks" fields MUST be written in Korean language.
           errorMessage.includes('429') ||
           errorMessage.includes('resource exhausted')) {
         throw createQuotaError('API 사용 한도가 초과되었습니다. 잠시 후 다시 시도해주세요.');
+      }
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Generate AI comments for multiple indicators in a single API call (2-3 sentences each)
+ *
+ * Batch processing:
+ * - Takes array of indicators with cache misses
+ * - Sends all indicators in one prompt
+ * - Returns JSON object with comments per symbol
+ *
+ * Explains for each indicator:
+ * 1. Why the indicator moved (reason for change)
+ * 2. Expected impact of this change
+ */
+export async function generateBatchComments(
+  indicators: Array<{ symbol: string; data: IndicatorData }>
+): Promise<Record<string, string>> {
+  // Build indicator descriptions for prompt
+  const indicatorDescriptions = indicators.map(({ symbol, data }) => {
+    const changePercent = Math.abs(data.changePercent).toFixed(2);
+
+    let periodContext = `1D: ${data.change >= 0 ? '+' : ''}${changePercent}%`;
+    if (data.changePercent7d !== undefined) {
+      const period7Label = symbol === 'MFG' || symbol === 'M2' ? '2M' : '7D';
+      periodContext += `, ${period7Label}: ${data.changePercent7d >= 0 ? '+' : ''}${Math.abs(data.changePercent7d).toFixed(2)}%`;
+    }
+    if (data.changePercent30d !== undefined) {
+      const period30Label = symbol === 'MFG' || symbol === 'M2' ? '3M' : '30D';
+      periodContext += `, ${period30Label}: ${data.changePercent30d >= 0 ? '+' : ''}${Math.abs(data.changePercent30d).toFixed(2)}%`;
+    }
+
+    return `${symbol} (${data.name}): ${data.value.toFixed(2)}${data.unit || ''} [${periodContext}]`;
+  }).join('\n');
+
+  const symbolList = indicators.map(({ symbol }) => symbol).join(', ');
+
+  const prompt = `You are a financial market analyst. Analyze the following ${indicators.length} economic indicators and provide a brief comment for EACH indicator (2-3 sentences in Korean).
+
+**Indicators:**
+${indicatorDescriptions}
+
+**Analysis Requirements:**
+For EACH indicator, provide a 2-3 sentence analysis in Korean following this structure:
+
+**Sentence 1 - Direction & Cause (MUST BE SPECIFIC):**
+State whether the indicator rose or fell compared to the previous day, and explain the reason using ONLY concrete evidence:
+- ✅ GOOD: Official announcements (e.g., "연준 파월 의장의 1월 7일 매파적 발언")
+- ✅ GOOD: Economic data releases (e.g., "12월 비농업 고용 30만명으로 예상치 25만명 상회")
+- ✅ GOOD: Policy decisions (e.g., "ECB의 50bp 금리 인상 결정")
+- ✅ GOOD: Geopolitical events (e.g., "중동 지역 유가 공급 차질 우려")
+- ❌ BAD: Abstract terms (e.g., "시장 불확실성", "투자자 심리 악화", "리스크 회피 심리")
+- ❌ BAD: Generic reasons (e.g., "경기 둔화 우려", "인플레이션 압력")
+
+**Sentence 2 - Market Impact:**
+Explain what this change means for specific markets, sectors, or assets.
+- Example: "이로 인해 성장주 중심의 주식 시장에 조정 압력이 가해질 전망입니다."
+- Example: "원자재 수출국 통화와 에너지 섹터가 수혜를 입을 것으로 예상됩니다."
+
+**CRITICAL RULES:**
+- ALWAYS mention the direction (상승/하락/증가/감소) in the first sentence
+- ALWAYS cite SPECIFIC, CONCRETE events or data (with dates/numbers if possible)
+- NEVER use abstract/vague terms like "시장 불안", "투자자 심리", "불확실성 증가"
+- NEVER make unsupported claims - only use verifiable facts
+- If you cannot find specific evidence, state "명확한 단일 원인 없이 기술적 조정" instead of making up reasons
+- Use concrete sector examples (e.g., "반도체", "신흥국 채권", "원자재 수출주")
+- Respond ONLY in valid JSON format
+
+**Evidence Priority:**
+1. Official policy announcements (Fed, ECB, government statements)
+2. Economic data releases (employment, CPI, GDP, etc.)
+3. Corporate earnings/guidance
+4. Geopolitical events with clear market impact
+5. Technical factors (if no fundamental catalyst exists)
+
+**Response Format:**
+{
+  "US10Y": "Korean comment here...",
+  "DXY": "Korean comment here...",
+  "HYS": "Korean comment here...",
+  ...
+}
+
+Generate comments for these symbols: ${symbolList}`;
+
+  try {
+    const response = await genAI.interactions.create({
+      model: 'gemini-2.5-flash-lite',
+      input: prompt,
+      response_modalities: ['text'],
+    });
+
+    // Extract text from outputs
+    let text = '';
+    for (const output of response.outputs || []) {
+      if (output.type === 'text' && output.text) {
+        text += output.text;
+      }
+    }
+
+    if (!text) {
+      throw new Error('No text output from Gemini API');
+    }
+
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Invalid response format from Gemini API (expected JSON)');
+    }
+
+    const comments = JSON.parse(jsonMatch[0]) as Record<string, string>;
+
+    // Validate that all requested symbols have comments
+    for (const { symbol } of indicators) {
+      if (!comments[symbol]) {
+        console.warn(`[generateBatchComments] Missing comment for ${symbol}`);
+      }
+    }
+
+    return comments;
+  } catch (error) {
+    console.error('[generateBatchComments] Error:', error);
+
+    // Check if it's a quota error
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+      if (errorMessage.includes('quota') ||
+          errorMessage.includes('rate limit') ||
+          errorMessage.includes('429') ||
+          errorMessage.includes('resource exhausted')) {
+        throw createQuotaError('API 사용 한도가 초과되었습니다.');
       }
     }
 

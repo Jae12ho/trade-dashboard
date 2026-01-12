@@ -1,4 +1,6 @@
 import { IndicatorData, FREDResponse, YahooFinanceQuote, HistoricalDataPoint, CoinGeckoSimplePrice, CoinGeckoMarketChart } from '../types/indicators';
+import { indicatorCommentCache } from '../cache/indicator-comment-cache';
+import { generateBatchComments } from './gemini';
 
 const FRED_API_KEY = process.env.FRED_API_KEY;
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
@@ -562,7 +564,98 @@ export async function getPutCallRatio(): Promise<IndicatorData> {
   }
 }
 
+/**
+ * Generate AI comments for all indicators using batch processing
+ *
+ * Strategy:
+ * 1. Check cache for each indicator (parallel reads - fast)
+ * 2. For cache misses, generate ALL comments in single API call (batch)
+ * 3. Store each comment in cache individually
+ */
+export async function attachAIComments(indicators: {
+  us10yYield: IndicatorData;
+  dxy: IndicatorData;
+  highYieldSpread: IndicatorData;
+  m2MoneySupply: IndicatorData;
+  crudeOil: IndicatorData;
+  copperGoldRatio: IndicatorData;
+  pmi: IndicatorData;
+  putCallRatio: IndicatorData;
+  bitcoin: IndicatorData;
+}): Promise<void> {
+  const indicatorMap: Array<{ symbol: string; data: IndicatorData }> = [
+    { symbol: 'US10Y', data: indicators.us10yYield },
+    { symbol: 'DXY', data: indicators.dxy },
+    { symbol: 'HYS', data: indicators.highYieldSpread },
+    { symbol: 'M2', data: indicators.m2MoneySupply },
+    { symbol: 'OIL', data: indicators.crudeOil },
+    { symbol: 'Cu/Au', data: indicators.copperGoldRatio },
+    { symbol: 'MFG', data: indicators.pmi },
+    { symbol: 'VIX', data: indicators.putCallRatio },
+    { symbol: 'BTC', data: indicators.bitcoin },
+  ];
+
+  console.log('[attachAIComments] Starting batch AI comment generation for 9 indicators');
+  const startTime = Date.now();
+
+  // Step 1: Check cache for all indicators (parallel - fast)
+  const cacheResults = await Promise.all(
+    indicatorMap.map(async ({ symbol, data }) => {
+      const cached = await indicatorCommentCache.getComment(symbol, data);
+      return { symbol, data, cached };
+    })
+  );
+
+  // Separate cache hits and misses
+  const cacheHits: Array<{ symbol: string; data: IndicatorData }> = [];
+  const cacheMisses: Array<{ symbol: string; data: IndicatorData }> = [];
+
+  for (const { symbol, data, cached } of cacheResults) {
+    if (cached) {
+      data.aiComment = cached;
+      cacheHits.push({ symbol, data });
+      console.log(`[attachAIComments] Cache hit: ${symbol}`);
+    } else {
+      cacheMisses.push({ symbol, data });
+    }
+  }
+
+  console.log(`[attachAIComments] Cache hits: ${cacheHits.length}, misses: ${cacheMisses.length}`);
+
+  // Step 2: Generate comments for all cache misses in single batch call
+  if (cacheMisses.length > 0) {
+    try {
+      console.log(`[attachAIComments] Generating batch comments for ${cacheMisses.length} indicators...`);
+      const batchComments = await generateBatchComments(cacheMisses);
+
+      // Step 3: Attach comments and cache individually
+      for (const { symbol, data } of cacheMisses) {
+        const comment = batchComments[symbol];
+        if (comment) {
+          data.aiComment = comment;
+          await indicatorCommentCache.setComment(symbol, data, comment);
+          console.log(`[attachAIComments] Cached batch comment for ${symbol}`);
+        } else {
+          console.warn(`[attachAIComments] No comment generated for ${symbol} (graceful degradation)`);
+          // Leave aiComment as undefined
+        }
+      }
+    } catch (error) {
+      console.error('[attachAIComments] Batch generation error:', error);
+      // Leave all aiComment fields as undefined (graceful degradation)
+    }
+  }
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(
+    `[attachAIComments] Completed in ${duration}s: ${cacheHits.length} cache hits, ${cacheMisses.length} batch generated`
+  );
+}
+
 export async function getAllIndicators() {
+  console.log('[getAllIndicators] Phase 1: Fetching indicator data...');
+
+  // Phase 1: Fetch all indicator data in parallel (no AI comments)
   const [
     us10yYield,
     dxy,
@@ -585,7 +678,7 @@ export async function getAllIndicators() {
     getBitcoin(),
   ]);
 
-  return {
+  const indicators = {
     us10yYield,
     dxy,
     highYieldSpread,
@@ -596,4 +689,8 @@ export async function getAllIndicators() {
     putCallRatio,
     bitcoin,
   };
+
+  console.log('[getAllIndicators] Completed');
+
+  return indicators;
 }

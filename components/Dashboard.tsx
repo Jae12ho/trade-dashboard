@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { DashboardData } from '@/lib/types/indicators';
 import IndicatorCard from './IndicatorCard';
 import AIPrediction from './AIPrediction';
@@ -9,8 +9,52 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
 
-  const fetchIndicators = async () => {
+  const fetchComments = useCallback(async (indicators: DashboardData['indicators']) => {
+    try {
+      setIsLoadingComments(true);
+
+      const commentsRes = await fetch('/api/indicator-comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indicators }),
+      });
+
+      if (!commentsRes.ok) {
+        console.error('Failed to fetch AI comments');
+        return;
+      }
+
+      const { comments } = await commentsRes.json() as { comments: Record<string, string | undefined> };
+
+      // Update data with AI comments
+      setData((prevData) => {
+        if (!prevData) return null;
+
+        return {
+          ...prevData,
+          indicators: {
+            us10yYield: { ...prevData.indicators.us10yYield, aiComment: comments.US10Y },
+            dxy: { ...prevData.indicators.dxy, aiComment: comments.DXY },
+            highYieldSpread: { ...prevData.indicators.highYieldSpread, aiComment: comments.HYS },
+            m2MoneySupply: { ...prevData.indicators.m2MoneySupply, aiComment: comments.M2 },
+            crudeOil: { ...prevData.indicators.crudeOil, aiComment: comments.OIL },
+            copperGoldRatio: { ...prevData.indicators.copperGoldRatio, aiComment: comments['Cu/Au'] },
+            pmi: { ...prevData.indicators.pmi, aiComment: comments.MFG },
+            putCallRatio: { ...prevData.indicators.putCallRatio, aiComment: comments.VIX },
+            bitcoin: { ...prevData.indicators.bitcoin, aiComment: comments.BTC },
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Error fetching AI comments:', err);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  }, []);
+
+  const fetchIndicators = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -24,12 +68,15 @@ export default function Dashboard() {
       const dashboardData: DashboardData = await indicatorsRes.json();
       setData(dashboardData);
 
+      // Fetch AI comments in background after indicators are loaded
+      fetchComments(dashboardData.indicators);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchComments]);
 
   useEffect(() => {
     fetchIndicators();
@@ -39,7 +86,7 @@ export default function Dashboard() {
     }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchIndicators]);
 
   // Generate filename with timestamp: trade-dashboard-YYYY-MM-DD-HH-MM.json
   const generateFileName = (): string => {
@@ -142,21 +189,21 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {/* Core Indicators */}
-        <IndicatorCard indicator={data.indicators.us10yYield} />
-        <IndicatorCard indicator={data.indicators.dxy} />
-        <IndicatorCard indicator={data.indicators.highYieldSpread} />
+        <IndicatorCard indicator={data.indicators.us10yYield} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.dxy} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.highYieldSpread} isLoadingComments={isLoadingComments} />
 
         {/* New Indicators (Phase 7) */}
-        <IndicatorCard indicator={data.indicators.m2MoneySupply} />
-        <IndicatorCard indicator={data.indicators.crudeOil} />
-        <IndicatorCard indicator={data.indicators.copperGoldRatio} />
+        <IndicatorCard indicator={data.indicators.m2MoneySupply} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.crudeOil} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.copperGoldRatio} isLoadingComments={isLoadingComments} />
 
         {/* Market Sentiment Indicators */}
-        <IndicatorCard indicator={data.indicators.pmi} />
-        <IndicatorCard indicator={data.indicators.putCallRatio} />
+        <IndicatorCard indicator={data.indicators.pmi} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.putCallRatio} isLoadingComments={isLoadingComments} />
 
         {/* Digital Asset Indicator (Phase 8) */}
-        <IndicatorCard indicator={data.indicators.bitcoin} />
+        <IndicatorCard indicator={data.indicators.bitcoin} isLoadingComments={isLoadingComments} />
       </div>
 
       <AIPrediction dashboardData={data} />
