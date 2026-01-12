@@ -334,7 +334,7 @@ The `getFilteredHistory` function ensures chart data matches the period labels:
 
 **Important**: Chart color is determined by 30D (or 3M) change direction, ensuring visual consistency with the displayed trend.
 
-## Gemini API Caching
+## Gemini API Caching (Market Analysis Only)
 
 **Cache Implementation** (lib/cache/gemini-cache-redis.ts):
 - **Type**: Upstash Redis (persistent, serverless-optimized)
