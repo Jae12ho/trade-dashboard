@@ -77,16 +77,18 @@ IndicatorCard + MiniChart components
 /app
   page.tsx                    # Home page (renders Dashboard)
   layout.tsx                  # Root layout with fonts & metadata
-  globals.css                 # Tailwind imports + CSS variables
+  globals.css                 # Tailwind imports + CSS variables + wiggle animation
   /api
     /indicators
       route.ts                # GET endpoint - returns all 9 indicators
     /ai-prediction
-      route.ts                # GET endpoint - returns Gemini AI analysis
+      route.ts                # GET endpoint - returns Gemini market analysis
+    /indicator-comments
+      route.ts                # POST endpoint - returns AI comments for indicators
 
 /components
   Dashboard.tsx               # Main client component (state, fetching, layout)
-  IndicatorCard.tsx           # Individual metric card display
+  IndicatorCard.tsx           # Individual metric card display with AI comment
   MiniChart.tsx               # Recharts line chart for 30-day trend
   AIPrediction.tsx            # AI sentiment & analysis display
   ThemeScript.tsx             # Dark mode initialization script
@@ -95,10 +97,11 @@ IndicatorCard + MiniChart components
   /types
     indicators.ts             # TypeScript interfaces (single source of truth)
   /api
-    indicators.ts             # External API fetch functions (FRED, Yahoo, CoinGecko)
-    gemini.ts                 # Google Gemini API integration
+    indicators.ts             # External API fetch functions + attachAIComments
+    gemini.ts                 # Google Gemini API integration (market + comments)
   /cache
-    gemini-cache-redis.ts     # Upstash Redis cache for Gemini responses (24h TTL)
+    gemini-cache-redis.ts     # Market analysis cache (24h TTL)
+    indicator-comment-cache.ts # Individual indicator comment cache (24h TTL)
 
 /ai
   PLAN.md                     # Development plans (Phase 7, 8, 9)
@@ -392,6 +395,97 @@ UPSTASH_REDIS_REST_TOKEN=your-token
 - 256 MB storage
 - Sufficient for ~2,000-3,000 user requests/day
 
+## AI Comments for Individual Indicators
+
+**Architecture**: Separate from market analysis; provides 2-3 sentence explanations per indicator.
+
+### Data Flow
+```
+Client (Dashboard.tsx)
+  ↓ fetch('/api/indicators') - loads indicators first
+Page displays immediately
+  ↓ fetch('/api/indicator-comments', POST) - background request
+  ↓ POST body: { indicators: DashboardData['indicators'] }
+Server (indicator-comments/route.ts)
+  ↓ attachAIComments(indicators)
+  ↓ Step 1: Check cache for all 9 indicators (parallel Redis reads)
+  ↓ Step 2: Batch generate comments for cache misses (single Gemini API call)
+  ↓ Step 3: Cache each comment individually
+Return { comments: Record<symbol, string> }
+  ↓ Dashboard updates state with comments
+IndicatorCard displays "AI 분석" with wiggle animation → comment
+```
+
+### Batch Processing Strategy
+- **Efficiency**: 9 indicators → 1 API call (90% API reduction vs sequential)
+- **Dynamic optimization**: Only cache misses sent to API (e.g., 3 misses = 3 in prompt)
+- **Individual caching**: Batch response split and cached per indicator (enables partial cache hits)
+
+### Cache Implementation (lib/cache/indicator-comment-cache.ts)
+- **Type**: Upstash Redis (same as market analysis)
+- **TTL**: 24 hours (86,400 seconds)
+- **Key Format**: `indicator:comment:{symbol}:{rounded_value}:{change_hash}:{date}`
+- **Aggressive Rounding** (maximizes cache hit rate):
+  - BTC: $1,000 units ($96,500 → $97,000)
+  - US10Y/HYS: 0.1% units (4.52% → 4.5%)
+  - DXY/VIX: Integer units (103.47 → 103)
+  - OIL: $1 units ($56.6 → $57)
+  - Cu/Au: 0.1 units (13.32 → 13.3)
+  - M2: $100B units
+  - MFG: 0.1 units
+  - Change%: Integer units (1.23% → 1%)
+
+### Prompt Engineering (lib/api/gemini.ts - generateBatchComments)
+**Model**: `gemini-2.5-flash-lite`
+**Language**: English prompts, Korean responses
+
+**Critical Requirements**:
+1. **Direction & Cause**: Always state 전일 대비 상승/하락 with SPECIFIC evidence
+   - ✅ Good: "연준 파월 의장의 1월 7일 매파적 발언", "12월 비농업 고용 30만명으로 예상치 상회"
+   - ❌ Bad: "시장 불확실성", "투자자 심리 악화", generic terms
+2. **Market Impact**: Explain effect on specific sectors/assets
+   - ✅ Good: "성장주 중심 기술주 섹터", "원자재 수출국 통화"
+   - ❌ Bad: "시장 전반", abstract statements
+
+**Evidence Priority**:
+1. Official policy announcements (Fed, ECB, government)
+2. Economic data releases (employment, CPI, GDP)
+3. Corporate earnings/guidance
+4. Geopolitical events with clear market impact
+5. Technical factors (if no fundamental catalyst)
+
+### UI Implementation (components/IndicatorCard.tsx)
+```tsx
+{isLoadingComments && !indicator.aiComment ? (
+  // Wiggle animation (same as AIPrediction)
+  <div className="w-4 h-4 bg-purple-600 dark:bg-purple-400 rounded-full"
+       style={{ animation: 'wiggle 2s ease-in-out infinite' }} />
+) : indicator.aiComment ? (
+  // Purple box with "AI 분석" label
+  <p>{indicator.aiComment}</p>
+) : null}
+```
+
+**Wiggle Animation** (app/globals.css):
+```css
+@keyframes wiggle {
+  0%, 100% { transform: scale(1); border-radius: 50%; }
+  25% { transform: scale(1.15); border-radius: 45%; }
+  50% { transform: scale(0.85); border-radius: 55%; }
+  75% { transform: scale(1.1); border-radius: 48%; }
+}
+```
+
+### Performance
+- **First load** (9 cache misses): Page displays in 3-5s, comments load in additional 3-5s
+- **Warm cache** (9 cache hits): Page displays in 3-5s, comments appear immediately (<100ms)
+- **Partial cache** (e.g., 6 hits, 3 misses): 3-5s for comments batch generation
+
+### Graceful Degradation
+- API quota exceeded: Comments simply don't appear (no error UI)
+- Network error: Silent failure, users see indicators without comments
+- Invalid JSON response: Logged to console, no user-facing error
+
 ## Data Collection Limits
 
 To ensure accurate multi-period calculations, APIs fetch more data than displayed:
@@ -411,6 +505,7 @@ See `/ai/PLAN.md` for detailed development plans:
 - Phase 8: Added Bitcoin (BTC/USD) via CoinGecko API
 - Phase 9: Multi-period change percentages (1D/7D/30D) with calendar-based calculation
 - Phase 10: Migrated Gemini cache to Upstash Redis for serverless persistence
+- Phase 11: Individual indicator AI comments with batch processing and aggressive caching
 
 ## Quirks & Known Issues
 
