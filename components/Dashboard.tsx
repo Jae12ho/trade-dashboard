@@ -80,12 +80,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchIndicators();
-
-    const interval = setInterval(() => {
-      fetchIndicators();
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
   }, [fetchIndicators]);
 
   // Generate filename with timestamp: trade-dashboard-YYYY-MM-DD-HH-MM.json
