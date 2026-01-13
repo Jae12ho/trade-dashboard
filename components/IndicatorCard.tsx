@@ -126,7 +126,11 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
                   ? indicator.history.slice(-12) // Monthly data: show last 12 entries (12 months)
                   : getFilteredHistory(indicator.history, 30) // Daily data: show last 30 calendar days
               }
-              isPositive={indicator.change30d !== undefined ? indicator.change30d >= 0 : indicator.change >= 0}
+              isPositive={
+                isMonthlyData && indicator.history.length >= 2
+                  ? indicator.history[indicator.history.length - 1].value >= indicator.history[0].value // 12-month change
+                  : (indicator.change30d !== undefined ? indicator.change30d >= 0 : indicator.change >= 0) // 30D or 1D change
+              }
             />
 
             {/* AI Comment - 차트 바로 아래에 배치 */}
