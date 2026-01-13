@@ -642,7 +642,22 @@ export async function attachAIComments(indicators: {
       }
     } catch (error) {
       console.error('[attachAIComments] Batch generation error:', error);
-      // Leave all aiComment fields as undefined (graceful degradation)
+
+      // Fallback: Try to get latest cached comments for each symbol
+      console.log('[attachAIComments] Attempting fallback to latest cached comments...');
+      for (const { symbol, data } of cacheMisses) {
+        try {
+          const fallbackComment = await indicatorCommentCache.getLatestComment(symbol);
+          if (fallbackComment) {
+            data.aiComment = fallbackComment;
+            console.log(`[attachAIComments] Using fallback comment for ${symbol}`);
+          } else {
+            console.warn(`[attachAIComments] No fallback available for ${symbol}`);
+          }
+        } catch (fallbackError) {
+          console.error(`[attachAIComments] Fallback error for ${symbol}:`, fallbackError);
+        }
+      }
     }
   }
 
