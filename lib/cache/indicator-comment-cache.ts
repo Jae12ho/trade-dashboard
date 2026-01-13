@@ -9,11 +9,18 @@ const redis = new Redis({
 /**
  * Cache for individual indicator AI comments
  *
- * Strategy: Aggressive rounding to maximize cache hit rate
- * - BTC: $1,000 units ($96,500 → $97,000)
- * - US10Y: 0.1% units (4.52% → 4.5%)
- * - DXY: Integer units (103.47 → 103)
- * - Change%: Integer units (1.23% → 1%)
+ * Strategy: Very aggressive rounding to maximize cache hit rate (50-70% target)
+ * - BTC: $5,000 units ($96,500 → $95,000)
+ * - US10Y/HYS: 0.5% units (4.52% → 4.5%)
+ * - DXY/VIX: 5.0 units (103.47 → 105)
+ * - OIL: $5 units ($56.6 → $55)
+ * - Cu/Au: 0.5 units (13.32 → 13.5)
+ * - M2: $500B units
+ * - MFG: 0.5 units
+ *
+ * Cache key: Only uses indicator value (no date, no change percentages)
+ * - AI comments describe general trends, not exact values
+ * - Value-based caching sufficient for meaningful insights
  *
  * TTL: 24 hours (86,400 seconds)
  * - Aligns with daily indicator update cycle
@@ -23,54 +30,37 @@ class IndicatorCommentCache {
   private readonly TTL = 86400; // 24 hours in seconds
 
   /**
-   * Round indicator value based on symbol for cache key
+   * Round indicator value based on symbol for cache key (5x more aggressive)
    */
   private roundValue(symbol: string, value: number): number {
     switch (symbol) {
       case 'BTC':
-        return Math.round(value / 1000) * 1000; // $1,000 units
+        return Math.round(value / 5000) * 5000; // $5,000 units ($96,500 → $95,000)
       case 'US10Y':
       case 'HYS':
-        return Math.round(value * 10) / 10; // 0.1% units
+        return Math.round(value * 2) / 2; // 0.5% units (4.52% → 4.5%)
       case 'DXY':
       case 'VIX':
-        return Math.round(value); // Integer units
+        return Math.round(value / 5) * 5; // 5.0 units (103.47 → 105)
       case 'M2':
-        return Math.round(value / 100) * 100; // $100B units
+        return Math.round(value / 500) * 500; // $500B units
       case 'OIL':
-        return Math.round(value); // $1 units (more aggressive: $56.6 → $57)
+        return Math.round(value / 5) * 5; // $5 units ($56.6 → $55)
       case 'Cu/Au':
-        return Math.round(value * 10) / 10; // 0.1 units (more aggressive: 13.32 → 13.3)
+        return Math.round(value * 2) / 2; // 0.5 units (13.32 → 13.5)
       case 'MFG':
-        return Math.round(value * 10) / 10; // 0.1 units
+        return Math.round(value * 2) / 2; // 0.5 units
       default:
-        return Math.round(value * 100) / 100; // Default: 2 decimal places
+        return Math.round(value); // Default: integer units
     }
   }
 
   /**
-   * Round change percentage for cache key
-   */
-  private roundChangePercent(changePercent: number): number {
-    return Math.round(changePercent); // Integer units (1.23% → 1%)
-  }
-
-  /**
-   * Generate cache key from indicator data
+   * Generate cache key from indicator data (value-only strategy)
    */
   private getCacheKey(symbol: string, data: IndicatorData): string {
     const roundedValue = this.roundValue(symbol, data.value);
-    const roundedChange = this.roundChangePercent(data.changePercent);
-    const roundedChange7d = data.changePercent7d !== undefined
-      ? this.roundChangePercent(data.changePercent7d)
-      : 'na';
-    const roundedChange30d = data.changePercent30d !== undefined
-      ? this.roundChangePercent(data.changePercent30d)
-      : 'na';
-
-    const date = new Date(data.lastUpdated).toISOString().split('T')[0]; // YYYY-MM-DD
-
-    return `indicator:comment:${symbol}:${roundedValue}:${roundedChange}_${roundedChange7d}_${roundedChange30d}:${date}`;
+    return `indicator:comment:${symbol}:${roundedValue}`;
   }
 
   /**

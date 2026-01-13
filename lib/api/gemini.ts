@@ -269,22 +269,24 @@ ${indicatorDescriptions}
 **Analysis Requirements:**
 For EACH indicator, provide a 2-3 sentence analysis in Korean following this structure:
 
-**Sentence 1 - Direction & Cause (MUST BE SPECIFIC):**
-State whether the indicator rose or fell compared to the previous day, and explain the reason using ONLY concrete evidence:
-- ✅ GOOD: Official announcements (e.g., "연준 파월 의장의 1월 7일 매파적 발언")
-- ✅ GOOD: Economic data releases (e.g., "12월 비농업 고용 30만명으로 예상치 25만명 상회")
-- ✅ GOOD: Policy decisions (e.g., "ECB의 50bp 금리 인상 결정")
-- ✅ GOOD: Geopolitical events (e.g., "중동 지역 유가 공급 차질 우려")
-- ❌ BAD: Abstract terms (e.g., "시장 불확실성", "투자자 심리 악화", "리스크 회피 심리")
-- ❌ BAD: Generic reasons (e.g., "경기 둔화 우려", "인플레이션 압력")
+**Sentence 1 - Cause & Context (MUST BE SPECIFIC):**
+Directly explain the reason for the change using ONLY concrete evidence. DO NOT start with descriptive statements like "지표가 X% 상승/하락했습니다".
+- ✅ GOOD: "연준 파월 의장의 1월 7일 매파적 발언으로 금리 인상 기대감이 높아졌습니다."
+- ✅ GOOD: "12월 비농업 고용이 30만명으로 예상치 25만명을 상회하며 강한 고용시장을 보였습니다."
+- ✅ GOOD: "ECB의 50bp 금리 인상 결정으로 유로존 긴축 정책이 강화되었습니다."
+- ✅ GOOD: "중동 지역 유가 공급 차질 우려가 확대되며 에너지 가격 상승 압력이 증가했습니다."
+- ❌ BAD: "VIX 지수가 15.12로 전일 대비 4.35% 상승했습니다." (단순 현황 설명)
+- ❌ BAD: "시장 불확실성", "투자자 심리 악화", "리스크 회피 심리" (추상적 표현)
+- ❌ BAD: "경기 둔화 우려", "인플레이션 압력" (일반적 이유)
 
 **Sentence 2 - Market Impact:**
 Explain what this change means for specific markets, sectors, or assets.
-- Example: "이로 인해 성장주 중심의 주식 시장에 조정 압력이 가해질 전망입니다."
+- Example: "이로 인해 성장주 중심의 기술주 섹터에 조정 압력이 가해질 전망입니다."
 - Example: "원자재 수출국 통화와 에너지 섹터가 수혜를 입을 것으로 예상됩니다."
 
 **CRITICAL RULES:**
-- ALWAYS mention the direction (상승/하락/증가/감소) in the first sentence
+- NEVER start with descriptive statements about the indicator's current value or percentage change (e.g., "지표가 X로 Y% 상승했습니다")
+- Start IMMEDIATELY with the causal explanation (WHY it changed)
 - ALWAYS cite SPECIFIC, CONCRETE events or data (with dates/numbers if possible)
 - NEVER use abstract/vague terms like "시장 불안", "투자자 심리", "불확실성 증가"
 - NEVER make unsupported claims - only use verifiable facts
