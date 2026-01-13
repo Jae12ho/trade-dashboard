@@ -46,6 +46,10 @@ export interface DashboardData {
 
     // Digital asset indicator (Phase 8)
     bitcoin: IndicatorData;
+
+    // Inflation & Employment indicators (Phase 11)
+    cpi: IndicatorData;     // Consumer Price Index
+    payems: IndicatorData;  // Total Nonfarm Employment (PAYEMS)
   };
   timestamp: string;
 }

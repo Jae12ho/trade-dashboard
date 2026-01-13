@@ -4,12 +4,12 @@
 
 ## 프로젝트 소개
 
-9개의 핵심 경제 지표를 실시간으로 모니터링하고, Google Gemini AI를 활용한 시장 분석을 제공하는 웹 애플리케이션입니다.
+11개의 핵심 경제 지표를 실시간으로 모니터링하고, Google Gemini AI를 활용한 시장 분석을 제공하는 웹 애플리케이션입니다.
 
 ## 주요 기능
 
 ### 📊 실시간 지표 모니터링
-- **9개 핵심 지표**: 매크로 경제(4개) + 원자재/자산(3개) + 시장 심리(2개)
+- **11개 핵심 지표**: 매크로 경제(6개) + 원자재/자산(3개) + 시장 심리(2개)
 - **다기간 변화율**: 1D/7D/30D (일별), 1M/2M/3M (월별)
 - **추세 차트**: 30일/12개월 히스토리 시각화
 - **데이터 다운로드**: 지표 데이터 JSON 파일 내보내기
@@ -63,11 +63,13 @@ npm run dev  # http://localhost:3000
 
 | 카테고리 | 지표 | 출처 | 빈도 |
 |---------|------|------|------|
-| **매크로 (4개)** |
+| **매크로 (6개)** |
 | | US 10Y Yield | FRED | 일별 |
 | | US Dollar Index (DXY) | Yahoo Finance | 일별 |
 | | High Yield Spread | FRED | 일별 |
 | | M2 Money Supply | FRED | 월별 |
+| | **Consumer Price Index (CPI)** 🆕 | FRED | 월별 |
+| | **비농업 고용자 수 (Total Nonfarm Employment)** 🆕 | FRED (PAYEMS) | 월별 |
 | **원자재/자산 (3개)** |
 | | Crude Oil (WTI) | Yahoo Finance | 일별 |
 | | Copper/Gold Ratio | Yahoo Finance | 일별 |

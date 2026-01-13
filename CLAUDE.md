@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a real-time financial market dashboard built with Next.js 16 (App Router) + React 19 + TypeScript. It aggregates 9 economic indicators from multiple external APIs (FRED, Yahoo Finance, CoinGecko) and provides AI-powered market analysis in Korean using Google Gemini.
+This is a real-time financial market dashboard built with Next.js 16 (App Router) + React 19 + TypeScript. It aggregates 11 economic indicators from multiple external APIs (FRED, Yahoo Finance, CoinGecko) and provides AI-powered market analysis in Korean using Google Gemini.
 
 **Key Technologies:**
 - Next.js 16.1.1 with App Router (file-based routing)
@@ -53,7 +53,7 @@ Client (Dashboard.tsx)
 Server API Route (/app/api/indicators/route.ts)
   ↓ getAllIndicators()
 Indicator Fetch Functions (lib/api/indicators.ts)
-  ↓ parallel Promise.all() for 9 indicators
+  ↓ parallel Promise.all() for 11 indicators
 External APIs (FRED, Yahoo Finance, CoinGecko)
   ↓ raw data responses
 Data Transformation & Normalization
@@ -67,7 +67,7 @@ IndicatorCard + MiniChart components
 
 1. **Server/Client Split**: Pages are server components, Dashboard is client component (`'use client'`)
 2. **Adapter Factory**: Each external API has dedicated fetch function that returns normalized `{ current, previous, history }` format
-3. **Parallel Aggregation**: `getAllIndicators()` uses `Promise.all()` to fetch 9 indicators concurrently
+3. **Parallel Aggregation**: `getAllIndicators()` uses `Promise.all()` to fetch 11 indicators concurrently
 4. **Polling Pattern**: Dashboard auto-refreshes every 5 minutes via `setInterval`
 5. **Force Dynamic**: API routes export `dynamic = 'force-dynamic'` to prevent caching
 
@@ -80,7 +80,7 @@ IndicatorCard + MiniChart components
   globals.css                 # Tailwind imports + CSS variables + wiggle animation
   /api
     /indicators
-      route.ts                # GET endpoint - returns all 9 indicators
+      route.ts                # GET endpoint - returns all 11 indicators
     /ai-prediction
       route.ts                # GET endpoint - returns Gemini market analysis
     /indicator-comments
@@ -108,22 +108,26 @@ IndicatorCard + MiniChart components
   TO_DO.md                    # Task tracking
 ```
 
-## The 9 Indicators
+## The 11 Indicators
 
-**Macro Indicators (4):**
+**Macro Indicators (6):**
 1. US 10Y Yield - FRED: `DGS10`
 2. US Dollar Index (DXY) - Yahoo Finance: `DX-Y.NYB`
 3. High Yield Spread - FRED: `BAMLH0A0HYM2`
 4. M2 Money Supply - FRED: `M2SL`
+5. Consumer Price Index (CPI) - FRED: `CPIAUCSL` (monthly)
+6. Total Nonfarm Employment - FRED: `PAYEMS` (monthly)
+   - Note: Displays total employment level (e.g., 159.53M), not monthly change
+   - 1M change shows monthly job creation/loss (e.g., +0.05M = 50K jobs added)
 
 **Commodity & Asset Indicators (3):**
-5. Crude Oil (WTI) - Yahoo Finance: `CL=F`
-6. Copper/Gold Ratio - Yahoo Finance calculated: `HG=F / GC=F × 10000`
-7. Bitcoin (BTC/USD) - CoinGecko: `bitcoin`
+7. Crude Oil (WTI) - Yahoo Finance: `CL=F`
+8. Copper/Gold Ratio - Yahoo Finance calculated: `HG=F / GC=F × 10000`
+9. Bitcoin (BTC/USD) - CoinGecko: `bitcoin`
 
 **Market Sentiment Indicators (2):**
-8. Manufacturing Confidence - FRED: `BSCICP02USM460S` (OECD)
-9. VIX (Fear Index) - Yahoo Finance: `^VIX`
+10. Manufacturing Confidence - FRED: `BSCICP02USM460S` (OECD)
+11. VIX (Fear Index) - Yahoo Finance: `^VIX`
 
 ## Adding New Indicators
 
@@ -219,7 +223,7 @@ To add a new indicator, follow this pattern:
 - Response language: Korean (specified in prompt)
 - Output format: JSON with `{ sentiment, reasoning, risks }`
 - Parse response: Extract JSON via regex `/{[\s\S]*}/`
-- Include all 9 indicators in formatted prompt
+- Include all 11 indicators in formatted prompt
 - Rate limits: 15 requests/min, 1,500 requests/day (free tier)
 
 ## Calculated Indicators
@@ -289,7 +293,7 @@ To add a new indicator, follow this pattern:
 1. Run `npm run dev` and verify in browser
 2. Test both light and dark modes
 3. Test responsive layouts (mobile, tablet, desktop)
-4. Check all 9 indicators load successfully
+4. Check all 11 indicators load successfully
 5. Verify AI prediction generates properly
 6. Monitor console for errors or warnings
 7. Run `npm run lint` before committing
@@ -344,7 +348,7 @@ The `getFilteredHistory` function ensures chart data matches the period labels:
 - **Storage**: Global distributed cache shared across all function instances
 - **TTL**: 24 hours (86,400 seconds)
   - Aligns with daily indicator update cycle
-  - 7 of 9 indicators update daily (trading days only)
+  - 7 of 11 indicators update daily (trading days only)
   - Maximizes fallback stability for quota errors
   - Covers weekends (Friday data available through Saturday)
 - **Key Strategy**:
@@ -408,7 +412,7 @@ Page displays immediately
   ↓ POST body: { indicators: DashboardData['indicators'] }
 Server (indicator-comments/route.ts)
   ↓ attachAIComments(indicators)
-  ↓ Step 1: Check cache for all 9 indicators (parallel Redis reads)
+  ↓ Step 1: Check cache for all 11 indicators (parallel Redis reads)
   ↓ Step 2: Batch generate comments for cache misses (single Gemini API call)
   ↓ Step 3: Cache each comment individually
 Return { comments: Record<symbol, string> }
@@ -417,7 +421,7 @@ IndicatorCard displays "AI 분석" with wiggle animation → comment
 ```
 
 ### Batch Processing Strategy
-- **Efficiency**: 9 indicators → 1 API call (90% API reduction vs sequential)
+- **Efficiency**: 11 indicators → 1 API call (90% API reduction vs sequential)
 - **Dynamic optimization**: Only cache misses sent to API (e.g., 3 misses = 3 in prompt)
 - **Individual caching**: Batch response split and cached per indicator (enables partial cache hits)
 

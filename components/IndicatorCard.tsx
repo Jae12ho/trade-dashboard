@@ -15,6 +15,9 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
     return change >= 0 ? 'bg-green-50 dark:bg-green-900/60' : 'bg-red-50 dark:bg-red-900/60';
   };
 
+  // Check if this is monthly data (uses 1M/2M/3M periods)
+  const isMonthlyData = ['MFG', 'M2', 'CPI', 'PAYEMS'].includes(indicator.symbol);
+
   // Filter history to show only last N calendar days (not just N entries)
   const getFilteredHistory = (history: typeof indicator.history, days: number) => {
     if (!history || history.length === 0) return [];
@@ -56,7 +59,7 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
           {/* Period 1 change */}
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              {indicator.symbol === 'MFG' || indicator.symbol === 'M2' ? '1M' : '1D'}
+              {isMonthlyData ? '1M' : '1D'}
             </span>
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded ${getBgColor(indicator.change)}`}>
               <span className={`text-xs font-semibold ${getChangeColor(indicator.change)}`}>
@@ -75,7 +78,7 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
           {indicator.changePercent7d !== undefined && (
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                {indicator.symbol === 'MFG' || indicator.symbol === 'M2' ? '2M' : '7D'}
+                {isMonthlyData ? '2M' : '7D'}
               </span>
               <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded ${getBgColor(indicator.change7d!)}`}>
                 <span className={`text-xs font-semibold ${getChangeColor(indicator.change7d!)}`}>
@@ -95,7 +98,7 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
           {indicator.changePercent30d !== undefined && (
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                {indicator.symbol === 'MFG' || indicator.symbol === 'M2' ? '3M' : '30D'}
+                {isMonthlyData ? '3M' : '30D'}
               </span>
               <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded ${getBgColor(indicator.change30d!)}`}>
                 <span className={`text-xs font-semibold ${getChangeColor(indicator.change30d!)}`}>
@@ -115,11 +118,11 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
         {indicator.history && indicator.history.length > 0 && (
           <div className="pt-2">
             <p className="text-xs text-zinc-400 dark:text-zinc-400 mb-2">
-              {indicator.symbol === 'MFG' || indicator.symbol === 'M2' ? 'Last 12 months' : 'Last 30 days'}
+              {isMonthlyData ? 'Last 12 months' : 'Last 30 days'}
             </p>
             <MiniChart
               data={
-                indicator.symbol === 'MFG' || indicator.symbol === 'M2'
+                isMonthlyData
                   ? indicator.history.slice(-12) // Monthly data: show last 12 entries (12 months)
                   : getFilteredHistory(indicator.history, 30) // Daily data: show last 30 calendar days
               }

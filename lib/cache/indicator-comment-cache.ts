@@ -60,6 +60,10 @@ class IndicatorCommentCache {
         return Math.round(value * 2) / 2; // 0.5 units (13.32 → 13.5)
       case 'MFG':
         return Math.round(value * 2) / 2; // 0.5 units
+      case 'CPI':
+        return Math.round(value * 10) / 10; // 0.1 units (308.417 → 308.4)
+      case 'PAYEMS':
+        return Math.round(value * 100) / 100; // 0.01M units (159.526 → 159.53)
       default:
         return Math.round(value); // Default: integer units
     }

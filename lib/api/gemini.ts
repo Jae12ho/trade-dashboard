@@ -23,6 +23,8 @@ export async function generateMarketPrediction(
     dxy,
     highYieldSpread,
     m2MoneySupply,
+    cpi,             // NEW
+    payems,          // NEW
     crudeOil,
     copperGoldRatio,
     pmi,
@@ -54,7 +56,7 @@ export async function generateMarketPrediction(
     return changes.join(', ');
   };
 
-  const prompt = `You are a professional financial market analyst. Provide a comprehensive market outlook by analyzing the following 9 economic indicators.
+  const prompt = `You are a professional financial market analyst. Provide a comprehensive market outlook by analyzing the following 11 economic indicators.
 
 === Economic Indicators ===
 
@@ -65,24 +67,33 @@ export async function generateMarketPrediction(
 
 **Macro Indicators (Monthly Data - 1M/2M/3M periods):**
 4. M2 Money Supply: $${m2MoneySupply.value.toFixed(2)}B (${formatMonthlyPeriodChanges(m2MoneySupply)})
+5. Consumer Price Index (CPI): ${cpi.value.toFixed(2)} (Index, Base 1982-1984=100) - (${formatMonthlyPeriodChanges(cpi)})
+   → 인플레이션 추세 및 연준 통화정책 방향성의 핵심 지표
+6. Total Nonfarm Employment: ${payems.value.toFixed(2)}M persons - (1M change: ${payems.change >= 0 ? '+' : ''}${payems.change.toFixed(2)}M / ${payems.changePercent.toFixed(2)}%, 2M: ${payems.change7d && payems.change7d >= 0 ? '+' : ''}${payems.change7d?.toFixed(2)}M / ${payems.changePercent7d?.toFixed(2)}%, 3M: ${payems.change30d && payems.change30d >= 0 ? '+' : ''}${payems.change30d?.toFixed(2)}M / ${payems.changePercent30d?.toFixed(2)}%)
+   → 전체 비농업 고용자 수. 1M change는 월간 일자리 증감 (예: +0.05M = 50,000명 증가)
+   → 노동시장 건전성 및 경제 성장 모멘텀의 핵심 지표
 
 **Commodity & Asset Indicators (Daily Data - 1D/7D/30D periods):**
-5. Crude Oil (WTI): $${crudeOil.value.toFixed(2)}/barrel (${formatPeriodChanges(crudeOil)})
-6. Copper/Gold Ratio: ${copperGoldRatio.value.toFixed(2)}×10000 (${formatPeriodChanges(copperGoldRatio)})
-7. Bitcoin (BTC/USD): $${bitcoin.value.toFixed(2)} (${formatPeriodChanges(bitcoin)})
+7. Crude Oil (WTI): $${crudeOil.value.toFixed(2)}/barrel (${formatPeriodChanges(crudeOil)})
+8. Copper/Gold Ratio: ${copperGoldRatio.value.toFixed(2)}×10000 (${formatPeriodChanges(copperGoldRatio)})
+9. Bitcoin (BTC/USD): $${bitcoin.value.toFixed(2)} (${formatPeriodChanges(bitcoin)})
 
 **Market Sentiment Indicators:**
-8. Manufacturing Confidence - OECD (Monthly Data - 1M/2M/3M periods): ${pmi.value.toFixed(2)} (${formatMonthlyPeriodChanges(pmi)})
-9. VIX - Fear Index (Daily Data - 1D/7D/30D periods): ${putCallRatio.value.toFixed(2)} (${formatPeriodChanges(putCallRatio)})
+10. Manufacturing Confidence - OECD (Monthly Data - 1M/2M/3M periods): ${pmi.value.toFixed(2)} (${formatMonthlyPeriodChanges(pmi)})
+11. VIX - Fear Index (Daily Data - 1D/7D/30D periods): ${putCallRatio.value.toFixed(2)} (${formatPeriodChanges(putCallRatio)})
 
 === Analysis Priority (CRITICAL) ===
 
 Your analysis MUST follow this strict priority order:
 
 **1. PRIMARY (70% weight): Economic Indicators**
-   - Base your core analysis on the 9 indicators' multi-period trends (1D/7D/30D or 1M/2M/3M)
+   - Base your core analysis on the 11 indicators' multi-period trends (1D/7D/30D or 1M/2M/3M)
    - Indicator movements are the foundation of your market outlook
    - Compare timeframes to identify momentum, trend reversals, and structural changes
+   - **CPI와 NFP는 연준 정책 결정의 핵심 변수이므로 특별히 주목**:
+     * CPI: 인플레이션 목표(2%) 대비 현황 평가
+     * NFP: 고용시장 과열/냉각 여부 판단
+   - 지표 간 상관관계 고려 (예: CPI↑ + NFP강세 → 긴축 압력 증가)
 
 **2. SECONDARY (25% weight): Official Announcements**
    - Fed policy statements, FOMC decisions, interest rate announcements

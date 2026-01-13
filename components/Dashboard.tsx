@@ -39,6 +39,8 @@ export default function Dashboard() {
             dxy: { ...prevData.indicators.dxy, aiComment: comments.DXY },
             highYieldSpread: { ...prevData.indicators.highYieldSpread, aiComment: comments.HYS },
             m2MoneySupply: { ...prevData.indicators.m2MoneySupply, aiComment: comments.M2 },
+            cpi: { ...prevData.indicators.cpi, aiComment: comments.CPI },                          // NEW
+            payems: { ...prevData.indicators.payems, aiComment: comments.PAYEMS },                 // NEW
             crudeOil: { ...prevData.indicators.crudeOil, aiComment: comments.OIL },
             copperGoldRatio: { ...prevData.indicators.copperGoldRatio, aiComment: comments['Cu/Au'] },
             pmi: { ...prevData.indicators.pmi, aiComment: comments.MFG },
@@ -182,22 +184,22 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {/* Core Indicators */}
+        {/* Macro Indicators (6 cards) - Rows 1-2 */}
         <IndicatorCard indicator={data.indicators.us10yYield} isLoadingComments={isLoadingComments} />
         <IndicatorCard indicator={data.indicators.dxy} isLoadingComments={isLoadingComments} />
         <IndicatorCard indicator={data.indicators.highYieldSpread} isLoadingComments={isLoadingComments} />
-
-        {/* New Indicators (Phase 7) */}
         <IndicatorCard indicator={data.indicators.m2MoneySupply} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.cpi} isLoadingComments={isLoadingComments} />       {/* NEW */}
+        <IndicatorCard indicator={data.indicators.payems} isLoadingComments={isLoadingComments} />    {/* NEW */}
+
+        {/* Commodity & Asset Indicators (3 cards) - Row 3 */}
         <IndicatorCard indicator={data.indicators.crudeOil} isLoadingComments={isLoadingComments} />
         <IndicatorCard indicator={data.indicators.copperGoldRatio} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.bitcoin} isLoadingComments={isLoadingComments} />
 
-        {/* Market Sentiment Indicators */}
+        {/* Market Sentiment Indicators (2 cards) - Row 4 */}
         <IndicatorCard indicator={data.indicators.pmi} isLoadingComments={isLoadingComments} />
         <IndicatorCard indicator={data.indicators.putCallRatio} isLoadingComments={isLoadingComments} />
-
-        {/* Digital Asset Indicator (Phase 8) */}
-        <IndicatorCard indicator={data.indicators.bitcoin} isLoadingComments={isLoadingComments} />
       </div>
 
       <AIPrediction dashboardData={data} />

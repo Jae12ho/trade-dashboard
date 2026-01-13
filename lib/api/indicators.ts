@@ -565,6 +565,89 @@ export async function getPutCallRatio(): Promise<IndicatorData> {
 }
 
 /**
+ * Get Consumer Price Index (CPI) - inflation measure
+ * FRED Series: CPIAUCSL (monthly, base 1982-1984=100)
+ * Monthly data uses 1M/2M/3M periods instead of 1D/7D/30D
+ */
+export async function getCPI(): Promise<IndicatorData> {
+  try {
+    const { current, history } = await fetchFREDData('CPIAUCSL', 40);
+
+    // Monthly data: use entry-based changes for 1M/2M/3M
+    const { change, changePercent } = calculatePeriodChange(current, history, 1);
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(current, history, 2);
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(current, history, 3);
+
+    return {
+      name: 'Consumer Price Index (CPI)',
+      symbol: 'CPI',
+      value: current,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
+      lastUpdated: new Date().toISOString(),
+      unit: 'Index',
+      history: history.slice(-12), // Last 12 months for chart
+    };
+  } catch (error) {
+    console.error('Error fetching CPI:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get Total Nonfarm Employment
+ * FRED Series: PAYEMS (monthly, in thousands)
+ * Monthly data uses 1M/2M/3M periods instead of 1D/7D/30D
+ * Note: Returns total employment count (not monthly change)
+ *       - Main value: Total employment level (e.g., 159.53M)
+ *       - 1M change: Monthly job creation/loss (e.g., 0.05M = 50K jobs added)
+ * FRED returns values in thousands, we convert to millions for better readability
+ */
+export async function getNFP(): Promise<IndicatorData> {
+  try {
+    const { current, history } = await fetchFREDData('PAYEMS', 40);
+
+    // Convert from thousands to millions for better readability
+    const currentInMillions = current / 1000;
+    const historyInMillions = history.map(point => ({
+      date: point.date,
+      value: point.value / 1000,
+    }));
+
+    // Monthly data: use entry-based changes for 1M/2M/3M
+    const { change, changePercent } = calculatePeriodChange(currentInMillions, historyInMillions, 1);
+    const { change: change7d, changePercent: changePercent7d } =
+      calculatePeriodChange(currentInMillions, historyInMillions, 2);
+    const { change: change30d, changePercent: changePercent30d } =
+      calculatePeriodChange(currentInMillions, historyInMillions, 3);
+
+    return {
+      name: 'Total Nonfarm Employment',
+      symbol: 'PAYEMS',
+      value: currentInMillions,
+      change: change ?? 0,
+      changePercent: changePercent ?? 0,
+      change7d,
+      changePercent7d,
+      change30d,
+      changePercent30d,
+      lastUpdated: new Date().toISOString(),
+      unit: 'M', // Millions (converted from FRED's thousands)
+      history: historyInMillions.slice(-12), // Last 12 months for chart
+    };
+  } catch (error) {
+    console.error('Error fetching NFP:', error);
+    throw error;
+  }
+}
+
+/**
  * Generate AI comments for all indicators using batch processing
  *
  * Strategy:
@@ -577,6 +660,8 @@ export async function attachAIComments(indicators: {
   dxy: IndicatorData;
   highYieldSpread: IndicatorData;
   m2MoneySupply: IndicatorData;
+  cpi: IndicatorData;              // NEW
+  payems: IndicatorData;           // NEW
   crudeOil: IndicatorData;
   copperGoldRatio: IndicatorData;
   pmi: IndicatorData;
@@ -588,6 +673,8 @@ export async function attachAIComments(indicators: {
     { symbol: 'DXY', data: indicators.dxy },
     { symbol: 'HYS', data: indicators.highYieldSpread },
     { symbol: 'M2', data: indicators.m2MoneySupply },
+    { symbol: 'CPI', data: indicators.cpi },         // NEW
+    { symbol: 'PAYEMS', data: indicators.payems },   // NEW
     { symbol: 'OIL', data: indicators.crudeOil },
     { symbol: 'Cu/Au', data: indicators.copperGoldRatio },
     { symbol: 'MFG', data: indicators.pmi },
@@ -595,7 +682,7 @@ export async function attachAIComments(indicators: {
     { symbol: 'BTC', data: indicators.bitcoin },
   ];
 
-  console.log('[attachAIComments] Starting batch AI comment generation for 9 indicators');
+  console.log('[attachAIComments] Starting batch AI comment generation for 11 indicators');
   const startTime = Date.now();
 
   // Step 1: Check cache for all indicators (parallel - fast)
@@ -676,6 +763,8 @@ export async function getAllIndicators() {
     dxy,
     highYieldSpread,
     m2MoneySupply,
+    cpi,             // NEW: Consumer Price Index
+    payems,          // NEW: Total Nonfarm Employment (PAYEMS)
     crudeOil,
     copperGoldRatio,
     pmi,
@@ -686,6 +775,8 @@ export async function getAllIndicators() {
     getDXY(),
     getHighYieldSpread(),
     getM2MoneySupply(),
+    getCPI(),                    // NEW
+    getNFP(),                    // NEW
     getCrudeOil(),
     getCopperGoldRatio(),
     getPMI(),
@@ -698,6 +789,8 @@ export async function getAllIndicators() {
     dxy,
     highYieldSpread,
     m2MoneySupply,
+    cpi,             // NEW
+    payems,          // NEW
     crudeOil,
     copperGoldRatio,
     pmi,
@@ -705,7 +798,7 @@ export async function getAllIndicators() {
     bitcoin,
   };
 
-  console.log('[getAllIndicators] Completed');
+  console.log('[getAllIndicators] Completed with 11 indicators');
 
   return indicators;
 }
