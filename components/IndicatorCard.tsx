@@ -4,9 +4,10 @@ import MiniChart from './MiniChart';
 interface IndicatorCardProps {
   indicator: IndicatorData;
   isLoadingComments?: boolean;
+  index?: number;
 }
 
-export default function IndicatorCard({ indicator, isLoadingComments = false }: IndicatorCardProps) {
+export default function IndicatorCard({ indicator, isLoadingComments = false, index = 0 }: IndicatorCardProps) {
   const getChangeColor = (change: number) => {
     return change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
   };
@@ -30,7 +31,13 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm hover:shadow-md transition-shadow h-full flex flex-col gap-4">
+    <div
+      className="glass-card rounded-xl p-6 h-full flex flex-col gap-4 opacity-0 group"
+      style={{
+        animation: 'fadeInUp 0.5s ease-out forwards',
+        animationDelay: `${index * 50}ms`,
+      }}
+    >
       <div className="flex flex-col gap-4 flex-1">
         <div className="flex items-start justify-between">
           <div>
@@ -135,7 +142,7 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
 
             {/* AI Comment - 차트 바로 아래에 배치 */}
             {isLoadingComments && !indicator.aiComment ? (
-              <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-800">
+              <div className="mt-3 p-3 bg-purple-50/80 dark:bg-purple-950/20 rounded-lg border border-purple-100/50 dark:border-purple-800/50 backdrop-blur-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold shrink-0">
                     AI 분석
@@ -152,7 +159,7 @@ export default function IndicatorCard({ indicator, isLoadingComments = false }: 
                 </div>
               </div>
             ) : indicator.aiComment ? (
-              <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-100 dark:border-purple-800">
+              <div className="mt-3 p-3 bg-purple-50/80 dark:bg-purple-950/20 rounded-lg border border-purple-100/50 dark:border-purple-800/50 backdrop-blur-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold shrink-0">
                     AI 분석

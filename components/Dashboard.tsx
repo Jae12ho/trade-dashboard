@@ -128,7 +128,7 @@ export default function Dashboard() {
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="flex flex-col items-center gap-4">
+        <div className="glass-card rounded-2xl p-8 flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-zinc-50 rounded-full animate-spin"></div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading market data...</p>
         </div>
@@ -139,7 +139,7 @@ export default function Dashboard() {
   if (error && !data) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
+        <div className="glass-card rounded-2xl p-8 text-center">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-2">
             Failed to load data
@@ -147,7 +147,7 @@ export default function Dashboard() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">{error}</p>
           <button
             onClick={fetchIndicators}
-            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
+            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-xl hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-all hover:scale-105 backdrop-blur-sm"
           >
             Retry
           </button>
@@ -172,7 +172,7 @@ export default function Dashboard() {
           </p>
           <button
             onClick={downloadJSON}
-            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2 text-sm font-medium"
+            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-xl hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-all hover:scale-105 hover:shadow-lg backdrop-blur-sm flex items-center gap-2 text-sm font-medium"
             title="Download all indicator data as JSON file"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,21 +185,21 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {/* Macro Indicators (6 cards) - Rows 1-2 */}
-        <IndicatorCard indicator={data.indicators.us10yYield} isLoadingComments={isLoadingComments} />
-        <IndicatorCard indicator={data.indicators.dxy} isLoadingComments={isLoadingComments} />
-        <IndicatorCard indicator={data.indicators.highYieldSpread} isLoadingComments={isLoadingComments} />
-        <IndicatorCard indicator={data.indicators.m2MoneySupply} isLoadingComments={isLoadingComments} />
-        <IndicatorCard indicator={data.indicators.cpi} isLoadingComments={isLoadingComments} />       {/* NEW */}
-        <IndicatorCard indicator={data.indicators.payems} isLoadingComments={isLoadingComments} />    {/* NEW */}
+        <IndicatorCard indicator={data.indicators.us10yYield} isLoadingComments={isLoadingComments} index={0} />
+        <IndicatorCard indicator={data.indicators.dxy} isLoadingComments={isLoadingComments} index={1} />
+        <IndicatorCard indicator={data.indicators.highYieldSpread} isLoadingComments={isLoadingComments} index={2} />
+        <IndicatorCard indicator={data.indicators.m2MoneySupply} isLoadingComments={isLoadingComments} index={3} />
+        <IndicatorCard indicator={data.indicators.cpi} isLoadingComments={isLoadingComments} index={4} />
+        <IndicatorCard indicator={data.indicators.payems} isLoadingComments={isLoadingComments} index={5} />
 
         {/* Commodity & Asset Indicators (3 cards) - Row 3 */}
-        <IndicatorCard indicator={data.indicators.crudeOil} isLoadingComments={isLoadingComments} />
-        <IndicatorCard indicator={data.indicators.copperGoldRatio} isLoadingComments={isLoadingComments} />
-        <IndicatorCard indicator={data.indicators.bitcoin} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.crudeOil} isLoadingComments={isLoadingComments} index={6} />
+        <IndicatorCard indicator={data.indicators.copperGoldRatio} isLoadingComments={isLoadingComments} index={7} />
+        <IndicatorCard indicator={data.indicators.bitcoin} isLoadingComments={isLoadingComments} index={8} />
 
         {/* Market Sentiment Indicators (2 cards) - Row 4 */}
-        <IndicatorCard indicator={data.indicators.pmi} isLoadingComments={isLoadingComments} />
-        <IndicatorCard indicator={data.indicators.putCallRatio} isLoadingComments={isLoadingComments} />
+        <IndicatorCard indicator={data.indicators.pmi} isLoadingComments={isLoadingComments} index={9} />
+        <IndicatorCard indicator={data.indicators.putCallRatio} isLoadingComments={isLoadingComments} index={10} />
       </div>
 
       <AIPrediction dashboardData={data} />

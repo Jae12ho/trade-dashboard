@@ -3,6 +3,14 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Glassmorphism variables */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: rgba(31, 38, 135, 0.07);
+  --gradient-start: #f8fafc;
+  --gradient-mid: #f1f5f9;
+  --gradient-end: #e2e8f0;
 }
 
 @theme inline {
@@ -15,12 +23,59 @@
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+
+  /* Glassmorphism variables (dark mode) */
+  --glass-bg: rgba(24, 24, 27, 0.55);
+  --glass-border: rgba(139, 92, 246, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.35);
+  --gradient-start: #100b18;
+  --gradient-mid: #181224;
+  --gradient-end: #000000;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Glassmorphism Card */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px 0 var(--glass-shadow);
+  border-color: var(--glass-border);
+}
+
+/* Dark mode enhanced glow */
+.dark .glass-card:hover {
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.45), 0 0 15px 0 rgba(139, 92, 246, 0.06);
+  border-color: rgba(139, 92, 246, 0.15);
+}
+
+/* Gradient Background */
+.gradient-bg {
+  background: linear-gradient(135deg, var(--gradient-start), var(--gradient-mid), var(--gradient-end));
+}
+
+/* Fade In Up Animation */
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* AI Loading Animation */

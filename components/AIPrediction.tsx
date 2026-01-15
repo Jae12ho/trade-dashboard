@@ -140,7 +140,13 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
+    <div
+      className="glass-card rounded-xl p-6 opacity-0"
+      style={{
+        animation: 'fadeInUp 0.5s ease-out forwards',
+        animationDelay: '600ms',
+      }}
+    >
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="text-2xl">🤖</div>
@@ -155,7 +161,7 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value as GeminiModelName)}
             disabled={loading}
-            className="px-3 py-1.5 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="px-3 py-1.5 text-xs bg-zinc-100/80 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all hover:scale-105 backdrop-blur-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {GEMINI_MODELS.map((model) => (
               <option key={model.value} value={model.value}>
@@ -168,7 +174,7 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
           <button
             onClick={() => fetchPrediction()}
             disabled={loading}
-            className="px-3 py-1.5 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-xs bg-zinc-100/80 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all hover:scale-105 backdrop-blur-sm disabled:opacity-50"
           >
             Refresh
           </button>
@@ -197,7 +203,7 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
           </p>
           <button
             onClick={() => fetchPrediction()}
-            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors text-sm"
+            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-xl hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-all hover:scale-105 backdrop-blur-sm text-sm"
           >
             Retry
           </button>
@@ -205,7 +211,7 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
       ) : (
         <div className="space-y-4">
           {prediction.isFallback && (
-            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <div className="p-3 bg-yellow-50/80 dark:bg-yellow-900/30 border border-yellow-200/50 dark:border-yellow-800/50 rounded-lg backdrop-blur-sm">
               <div className="flex items-start gap-2">
                 <span className="text-yellow-600 dark:text-yellow-400 text-lg">⚠️</span>
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 leading-relaxed">
