@@ -78,6 +78,13 @@ body {
   }
 }
 
+/* Remove focus outline from Recharts */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface {
+  outline: none !important;
+}
+
 /* AI Loading Animation */
 @keyframes wiggle {
   0%, 100% {
