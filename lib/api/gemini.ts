@@ -14,6 +14,95 @@ export interface MarketPrediction {
   fallbackMessage?: string;
 }
 
+// =============================================================================
+// Helper Functions (리팩토링된 공통 유틸리티)
+// =============================================================================
+
+/**
+ * 기간별 변화율 포맷팅 (일별/월별 데이터 통합)
+ * @param indicator - 지표 데이터
+ * @param isMonthly - 월별 데이터 여부 (true: 1M/2M/3M, false: 1D/7D/30D)
+ */
+function formatPeriodChanges(
+  indicator: { changePercent: number; changePercent7d?: number; changePercent30d?: number },
+  isMonthly: boolean = false
+): string {
+  const labels = isMonthly
+    ? ['1M', '2M', '3M']
+    : ['1D', '7D', '30D'];
+
+  const formatChange = (value: number) =>
+    `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+
+  const changes = [`${labels[0]}: ${formatChange(indicator.changePercent)}`];
+
+  if (indicator.changePercent7d !== undefined) {
+    changes.push(`${labels[1]}: ${formatChange(indicator.changePercent7d)}`);
+  }
+  if (indicator.changePercent30d !== undefined) {
+    changes.push(`${labels[2]}: ${formatChange(indicator.changePercent30d)}`);
+  }
+
+  return changes.join(', ');
+}
+
+/**
+ * Gemini API 응답에서 텍스트 추출
+ */
+function extractTextFromOutputs(outputs: Array<{ type?: string; text?: string }> | undefined): string {
+  let text = '';
+  for (const output of outputs || []) {
+    if (output.type === 'text' && output.text) {
+      text += output.text;
+    }
+  }
+  return text;
+}
+
+/**
+ * 응답 텍스트에서 JSON 추출 및 파싱
+ * @throws Error if no text or invalid JSON format
+ */
+function parseJsonFromResponse<T>(text: string): T {
+  if (!text) {
+    throw new Error('No text output from Gemini API');
+  }
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('Invalid response format from Gemini API');
+  }
+
+  return JSON.parse(jsonMatch[0]) as T;
+}
+
+/**
+ * Quota/Rate limit 에러 여부 확인
+ */
+function isQuotaError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  const errorMessage = error.message.toLowerCase();
+  return errorMessage.includes('quota') ||
+         errorMessage.includes('rate limit') ||
+         errorMessage.includes('429') ||
+         errorMessage.includes('resource exhausted');
+}
+
+/**
+ * Quota 에러 처리 - quota 에러면 throw, 아니면 원본 에러 throw
+ */
+function handleApiError(error: unknown, quotaMessage: string): never {
+  if (isQuotaError(error)) {
+    throw createQuotaError(quotaMessage);
+  }
+  throw error;
+}
+
+// =============================================================================
+// Main Functions
+// =============================================================================
+
 export async function generateMarketPrediction(
   dashboardData: DashboardData,
   modelName: GeminiModelName = DEFAULT_GEMINI_MODEL
@@ -23,38 +112,14 @@ export async function generateMarketPrediction(
     dxy,
     highYieldSpread,
     m2MoneySupply,
-    cpi,             // NEW
-    payems,          // NEW
+    cpi,
+    payems,
     crudeOil,
     copperGoldRatio,
     pmi,
     putCallRatio,
     bitcoin,
   } = dashboardData.indicators;
-
-  // Format period changes for daily data (1D, 7D, 30D)
-  const formatPeriodChanges = (indicator: typeof us10yYield) => {
-    const changes = [`1D: ${indicator.changePercent >= 0 ? '+' : ''}${indicator.changePercent.toFixed(2)}%`];
-    if (indicator.changePercent7d !== undefined) {
-      changes.push(`7D: ${indicator.changePercent7d >= 0 ? '+' : ''}${indicator.changePercent7d.toFixed(2)}%`);
-    }
-    if (indicator.changePercent30d !== undefined) {
-      changes.push(`30D: ${indicator.changePercent30d >= 0 ? '+' : ''}${indicator.changePercent30d.toFixed(2)}%`);
-    }
-    return changes.join(', ');
-  };
-
-  // Format period changes for monthly data (1M, 2M, 3M)
-  const formatMonthlyPeriodChanges = (indicator: typeof m2MoneySupply) => {
-    const changes = [`1M: ${indicator.changePercent >= 0 ? '+' : ''}${indicator.changePercent.toFixed(2)}%`];
-    if (indicator.changePercent7d !== undefined) {
-      changes.push(`2M: ${indicator.changePercent7d >= 0 ? '+' : ''}${indicator.changePercent7d.toFixed(2)}%`);
-    }
-    if (indicator.changePercent30d !== undefined) {
-      changes.push(`3M: ${indicator.changePercent30d >= 0 ? '+' : ''}${indicator.changePercent30d.toFixed(2)}%`);
-    }
-    return changes.join(', ');
-  };
 
   const prompt = `You are a professional financial market analyst. Provide a comprehensive market outlook by analyzing the following 11 economic indicators.
 
@@ -66,8 +131,8 @@ export async function generateMarketPrediction(
 3. High Yield Spread: ${highYieldSpread.value.toFixed(2)} bps (${formatPeriodChanges(highYieldSpread)})
 
 **Macro Indicators (Monthly Data - 1M/2M/3M periods):**
-4. M2 Money Supply: $${m2MoneySupply.value.toFixed(2)}B (${formatMonthlyPeriodChanges(m2MoneySupply)})
-5. Consumer Price Index (CPI): ${cpi.value.toFixed(2)} (Index, Base 1982-1984=100) - (${formatMonthlyPeriodChanges(cpi)})
+4. M2 Money Supply: $${m2MoneySupply.value.toFixed(2)}B (${formatPeriodChanges(m2MoneySupply, true)})
+5. Consumer Price Index (CPI): ${cpi.value.toFixed(2)} (Index, Base 1982-1984=100) - (${formatPeriodChanges(cpi, true)})
    → 인플레이션 추세 및 연준 통화정책 방향성의 핵심 지표
 6. Total Nonfarm Employment: ${payems.value.toFixed(2)}M persons - (1M change: ${payems.change >= 0 ? '+' : ''}${payems.change.toFixed(2)}M / ${payems.changePercent.toFixed(2)}%, 2M: ${payems.change7d && payems.change7d >= 0 ? '+' : ''}${payems.change7d?.toFixed(2)}M / ${payems.changePercent7d?.toFixed(2)}%, 3M: ${payems.change30d && payems.change30d >= 0 ? '+' : ''}${payems.change30d?.toFixed(2)}M / ${payems.changePercent30d?.toFixed(2)}%)
    → 전체 비농업 고용자 수. 1M change는 월간 일자리 증감 (예: +0.05M = 50,000명 증가)
@@ -79,14 +144,14 @@ export async function generateMarketPrediction(
 9. Bitcoin (BTC/USD): $${bitcoin.value.toFixed(2)} (${formatPeriodChanges(bitcoin)})
 
 **Market Sentiment Indicators:**
-10. Manufacturing Confidence - OECD (Monthly Data - 1M/2M/3M periods): ${pmi.value.toFixed(2)} (${formatMonthlyPeriodChanges(pmi)})
+10. Manufacturing Confidence - OECD (Monthly Data - 1M/2M/3M periods): ${pmi.value.toFixed(2)} (${formatPeriodChanges(pmi, true)})
 11. VIX - Fear Index (Daily Data - 1D/7D/30D periods): ${putCallRatio.value.toFixed(2)} (${formatPeriodChanges(putCallRatio)})
 
 === Analysis Priority (CRITICAL) ===
 
 Your analysis MUST follow this strict priority order:
 
-**1. PRIMARY (70% weight): Economic Indicators**
+**1. PRIMARY (50% weight): Economic Indicators**
    - Base your core analysis on the 11 indicators' multi-period trends (1D/7D/30D or 1M/2M/3M)
    - Indicator movements are the foundation of your market outlook
    - Compare timeframes to identify momentum, trend reversals, and structural changes
@@ -102,57 +167,100 @@ Your analysis MUST follow this strict priority order:
    - Government fiscal/regulatory policy changes
    - Use these to explain WHY indicators are moving
 
-**3. TERTIARY (5% weight): Market Commentary & Analyst Opinions**
-   - Individual analyst opinions, market forecasts, investment recommendations
-   - Company-specific news and earnings predictions
-   - General market commentary without official backing
-   - Use only as supplementary context with minimal influence
+**3. TERTIARY (25% weight): Expert Opinions & Analyst Consensus**
+
+   **REQUIRED: Search and categorize expert opinions into three groups:**
+
+   🟢 **BULLISH/BUY Opinions:**
+   - Analysts recommending buying, increasing exposure, overweight positions
+   - Forecasts predicting market/index gains with specific price targets
+   - Optimistic outlooks from major investment banks
+
+   🔴 **BEARISH/SELL Opinions:**
+   - Analysts recommending selling, reducing exposure, underweight positions
+   - Forecasts predicting market/index declines with downside targets
+   - Cautious/pessimistic outlooks, recession warnings
+
+   ⚪ **NEUTRAL/HOLD Opinions:**
+   - Analysts recommending holding current positions
+   - Mixed or uncertain outlooks, wait-and-see recommendations
+
+   **Synthesis Method:**
+   - Count opinions in each category (e.g., "5 bullish, 2 bearish, 3 neutral")
+   - Identify consensus direction and confidence level
+   - Weight by source credibility: Major Investment Banks (Goldman Sachs, Morgan Stanley, JPMorgan) > Research Firms (Morningstar) > Independent Analysts
+   - Note significant contrarian views from credible sources
 
 === Google Search Instructions ===
 
 You have access to real-time web search capabilities. Use them strategically:
 
-**REQUIRED SEARCHES (High Priority):**
+**REQUIRED SEARCHES - Official Announcements (25% weight):**
 - Search for latest Fed announcements, FOMC decisions, or interest rate changes
 - Search for recent Trump policy statements, executive orders, or trade policy changes
 - Search for official U.S. economic data releases (CPI, PPI, unemployment, GDP) from the last 7 days
 - Search for major geopolitical events affecting markets (tariffs, sanctions, conflicts)
+
+**REQUIRED SEARCHES - Expert Opinions (25% weight):**
+- Search for "S&P 500 analyst forecast 2026" or "stock market outlook 2026"
+- Search for "Wall Street investment bank recommendation"
+- Search for "Goldman Sachs market outlook" or "Morgan Stanley forecast"
+- Search for "analyst buy sell rating stock market"
 
 **Search Query Examples:**
 - "Fed interest rate decision January 2026"
 - "Trump tariff announcement this week"
 - "US CPI inflation data latest"
 - "FOMC statement recent"
+- "Wall Street analyst stock market forecast January 2026"
+- "Goldman Sachs S&P 500 target 2026"
+- "investment bank bullish bearish outlook"
 
 **Search Guidelines:**
-1. Prioritize searches for OFFICIAL ANNOUNCEMENTS (Fed, government, Trump)
-2. Focus on events from the **last 7 days** for maximum relevance
-3. Verify source credibility (Fed.gov, WhiteHouse.gov, BLS.gov, Reuters, Bloomberg)
-4. If search returns analyst opinions, weight them at 5% (TERTIARY)
-5. If no official announcements found: Base analysis on indicators only (70% weight on indicators increases)
+1. Search for BOTH official announcements AND expert opinions
+2. Focus on events/opinions from the **last 7 days** for maximum relevance
+3. For official news: Verify source credibility (Fed.gov, WhiteHouse.gov, BLS.gov, Reuters, Bloomberg)
+4. For expert opinions: Prioritize major investment banks and research firms
+5. Categorize expert opinions as BULLISH/BEARISH/NEUTRAL
 
-**CRITICAL**: Always attempt to search for official policy/data announcements BEFORE writing your analysis. Use Google Search to find the most recent and credible official sources.
+**CRITICAL**: You MUST search for both official announcements AND expert opinions before writing your analysis.
 
 === News Classification Guide ===
 
 When evaluating news articles, classify them:
 
-**HIGH PRIORITY (Official Announcements):**
-- "Fed announces rate cut" → Official policy (25% weight)
-- "Trump imposes new tariffs on China" → Political decision (25% weight)
-- "U.S. inflation hits 3.2%" → Official data (25% weight)
+**HIGH PRIORITY (Official Announcements - 25% weight):**
+- "Fed announces rate cut" → Official policy
+- "Trump imposes new tariffs on China" → Political decision
+- "U.S. inflation hits 3.2%" → Official data
 
-**LOW PRIORITY (Analyst Opinions):**
-- "Analyst predicts market rally" → Opinion (5% weight)
-- "XYZ stock looks attractive" → Individual view (5% weight)
-- "Economist forecasts recession" → Forecast/prediction (5% weight)
+**MEDIUM PRIORITY (Expert Opinions - 25% weight):**
+Categorize each opinion as BULLISH, BEARISH, or NEUTRAL:
 
-**If unsure about classification**: Default to LOW PRIORITY (5% weight)
+🟢 BULLISH examples:
+- "Goldman Sachs raises S&P 500 target to 6,500" → Bullish
+- "Morgan Stanley recommends overweight equities" → Bullish
+- "JPMorgan sees 15% upside in stocks" → Bullish
+
+🔴 BEARISH examples:
+- "Bank of America warns of 20% correction" → Bearish
+- "Deutsche Bank recommends underweight" → Bearish
+- "Analyst predicts recession in Q2" → Bearish
+
+⚪ NEUTRAL examples:
+- "Citi maintains market-weight rating" → Neutral
+- "UBS sees mixed outlook, recommends hold" → Neutral
+
+**Source Credibility Ranking:**
+1. Major Investment Banks: Goldman Sachs, Morgan Stanley, JPMorgan, Bank of America, Citi, UBS
+2. Research Firms: Morningstar, S&P Global, Moody's
+3. Financial Media Analysts: Bloomberg, Reuters contributors
+4. Independent Analysts: Lower weight within the 25%
 
 === Analysis Requirements ===
-1. **Multi-Period Indicator Analysis** (PRIMARY - 70%):
-   - For DAILY indicators (#1-3, #5-7, #9): Use 1D/7D/30D periods to identify short-term vs long-term trends
-   - For MONTHLY indicators (#4, #8): Use 1M/2M/3M periods to identify monthly trends
+1. **Multi-Period Indicator Analysis** (PRIMARY - 50%):
+   - For DAILY indicators (#1-3, #7-9, #11): Use 1D/7D/30D periods to identify short-term vs long-term trends
+   - For MONTHLY indicators (#4-6, #10): Use 1M/2M/3M periods to identify monthly trends
    - Compare different timeframes to assess momentum and trend reversals
    - Analyze cross-indicator relationships (e.g., yields vs dollar, VIX vs equities)
 
@@ -162,28 +270,38 @@ When evaluating news articles, classify them:
    - Good example: "연준의 긴축 기조 유지 발언(FOMC 성명서)에 따라 10년물 국채 수익률이 상승..."
    - Bad example: "뉴스1에 따르면...", "(뉴스2)"
 
-3. **Market Commentary Context** (TERTIARY - 5%):
-   - Use analyst opinions only as minor supplementary context
-   - Never let opinions drive your core analysis
-   - Example: "일부 시장 참여자들의 낙관론에도 불구하고, 지표는..."
+3. **Expert Opinion Synthesis** (TERTIARY - 25%):
+   - MUST search for and report expert opinions from major investment banks
+   - Categorize opinions: Count BULLISH vs BEARISH vs NEUTRAL
+   - Report consensus: "월가 주요 IB 중 X개사 매수, Y개사 매도, Z개사 중립 의견"
+   - Include specific analyst names and price targets when available
+   - Note significant contrarian views from credible sources
+   - Good example: "Goldman Sachs는 S&P 500 목표가를 6,500으로 상향하며 매수 의견을 유지한 반면, Morgan Stanley는 단기 조정 가능성을 경고했습니다."
 
-4. **Indicator-Driven Reasoning**:
-   - Always start with what the indicators show
-   - Then add official announcements as context
-   - Finally, mention market commentary briefly if relevant
+4. **Balanced Reasoning**:
+   - Start with indicator analysis (50%)
+   - Integrate official announcements (25%)
+   - Synthesize expert consensus with opinion distribution (25%)
+   - All three factors should be reflected in your reasoning
 
-5. **Market Sentiment**: Determine sentiment ("bullish"/"bearish"/"neutral") based primarily on indicators (70%), official news (25%), and commentary (5%)
+5. **Market Sentiment**: Determine sentiment ("bullish"/"bearish"/"neutral") based on:
+   - Economic indicators (50%)
+   - Official announcements (25%)
+   - Expert consensus direction (25%)
 
-6. **Specific Risks**: Identify 3-4 concrete risks based on indicator trends and official policy developments
+6. **Specific Risks**: Identify 3-4 concrete risks based on indicator trends, official policy, AND contrarian expert views
 
 Respond ONLY with the following JSON format:
 {
   "sentiment": "bullish" | "bearish" | "neutral",
-  "reasoning": "5-6 sentences of analysis with specific news references",
+  "reasoning": "5-6 sentences including indicator analysis, official news, AND expert opinion consensus (e.g., 'X bullish, Y bearish, Z neutral')",
   "risks": ["risk 1", "risk 2", "risk 3"]
 }
 
-CRITICAL: The "reasoning" and "risks" fields MUST be written in Korean language. Provide detailed, news-driven insights rather than generic observations. When citing news, mention the actual event and source (e.g., "Reuters", "Bloomberg"), NOT index numbers like "(뉴스1)".`;
+CRITICAL:
+- The "reasoning" and "risks" fields MUST be written in Korean language
+- You MUST include expert opinion consensus in your reasoning (e.g., "주요 IB 5곳 중 3곳 매수, 1곳 매도, 1곳 중립")
+- When citing sources, mention the actual institution/analyst name (e.g., "Goldman Sachs", "Morgan Stanley"), NOT generic terms`;
 
   try {
     const interaction = await genAI.interactions.create({
@@ -193,48 +311,18 @@ CRITICAL: The "reasoning" and "risks" fields MUST be written in Korean language.
       response_modalities: ['text'],
     });
 
-    // Extract text from outputs
-    let text = '';
-    for (const output of interaction.outputs || []) {
-      if (output.type === 'text' && output.text) {
-        text += output.text;
-      }
-    }
-
-    if (!text) {
-      throw new Error('No text output from Gemini API');
-    }
-
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Invalid response format from Gemini API');
-    }
-
-    const prediction = JSON.parse(jsonMatch[0]);
+    const text = extractTextFromOutputs(interaction.outputs);
+    const prediction = parseJsonFromResponse<{ sentiment: string; reasoning: string; risks?: string[] }>(text);
 
     return {
-      sentiment: prediction.sentiment,
+      sentiment: prediction.sentiment as 'bullish' | 'bearish' | 'neutral',
       reasoning: prediction.reasoning,
       risks: prediction.risks || [],
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
     console.error('Error generating market prediction:', error);
-
-    // Check if it's a rate limit or quota exceeded error
-    if (error instanceof Error) {
-      const errorMessage = error.message.toLowerCase();
-
-      if (errorMessage.includes('quota') ||
-          errorMessage.includes('rate limit') ||
-          errorMessage.includes('429') ||
-          errorMessage.includes('resource exhausted')) {
-        throw createQuotaError('API 사용 한도가 초과되었습니다. 잠시 후 다시 시도해주세요.');
-      }
-    }
-
-    throw error;
+    handleApiError(error, 'API 사용 한도가 초과되었습니다. 잠시 후 다시 시도해주세요.');
   }
 }
 
@@ -255,18 +343,8 @@ export async function generateBatchComments(
 ): Promise<Record<string, string>> {
   // Build indicator descriptions for prompt
   const indicatorDescriptions = indicators.map(({ symbol, data }) => {
-    const changePercent = Math.abs(data.changePercent).toFixed(2);
-
-    let periodContext = `1D: ${data.change >= 0 ? '+' : ''}${changePercent}%`;
-    if (data.changePercent7d !== undefined) {
-      const period7Label = symbol === 'MFG' || symbol === 'M2' ? '2M' : '7D';
-      periodContext += `, ${period7Label}: ${data.changePercent7d >= 0 ? '+' : ''}${Math.abs(data.changePercent7d).toFixed(2)}%`;
-    }
-    if (data.changePercent30d !== undefined) {
-      const period30Label = symbol === 'MFG' || symbol === 'M2' ? '3M' : '30D';
-      periodContext += `, ${period30Label}: ${data.changePercent30d >= 0 ? '+' : ''}${Math.abs(data.changePercent30d).toFixed(2)}%`;
-    }
-
+    const isMonthly = symbol === 'MFG' || symbol === 'M2' || symbol === 'CPI' || symbol === 'PAYEMS';
+    const periodContext = formatPeriodChanges(data, isMonthly);
     return `${symbol} (${data.name}): ${data.value.toFixed(2)}${data.unit || ''} [${periodContext}]`;
   }).join('\n');
 
@@ -329,25 +407,8 @@ Generate comments for these symbols: ${symbolList}`;
       response_modalities: ['text'],
     });
 
-    // Extract text from outputs
-    let text = '';
-    for (const output of response.outputs || []) {
-      if (output.type === 'text' && output.text) {
-        text += output.text;
-      }
-    }
-
-    if (!text) {
-      throw new Error('No text output from Gemini API');
-    }
-
-    // Extract JSON from response (handle markdown code blocks)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Invalid response format from Gemini API (expected JSON)');
-    }
-
-    const comments = JSON.parse(jsonMatch[0]) as Record<string, string>;
+    const text = extractTextFromOutputs(response.outputs);
+    const comments = parseJsonFromResponse<Record<string, string>>(text);
 
     // Validate that all requested symbols have comments
     for (const { symbol } of indicators) {
@@ -359,18 +420,6 @@ Generate comments for these symbols: ${symbolList}`;
     return comments;
   } catch (error) {
     console.error('[generateBatchComments] Error:', error);
-
-    // Check if it's a quota error
-    if (error instanceof Error) {
-      const errorMessage = error.message.toLowerCase();
-      if (errorMessage.includes('quota') ||
-          errorMessage.includes('rate limit') ||
-          errorMessage.includes('429') ||
-          errorMessage.includes('resource exhausted')) {
-        throw createQuotaError('API 사용 한도가 초과되었습니다.');
-      }
-    }
-
-    throw error;
+    handleApiError(error, 'API 사용 한도가 초과되었습니다.');
   }
 }
