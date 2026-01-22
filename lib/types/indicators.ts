@@ -23,9 +23,14 @@ export interface IndicatorData {
   lastUpdated: string;
   unit?: string;
   history?: HistoricalDataPoint[];
+}
 
-  // AI-generated comment (2-3 sentences)
-  aiComment?: string;
+// AI comments stored separately from indicator data
+export type IndicatorComments = Record<string, string | undefined>;
+
+// API response type for /api/indicator-comments
+export interface IndicatorCommentsResponse {
+  comments: IndicatorComments;
 }
 
 export interface DashboardData {

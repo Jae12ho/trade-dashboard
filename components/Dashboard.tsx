@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { DashboardData } from '@/lib/types/indicators';
+import { DashboardData, IndicatorComments } from '@/lib/types/indicators';
 import IndicatorCard from './IndicatorCard';
 import AIPrediction from './AIPrediction';
 
@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [aiComments, setAiComments] = useState<IndicatorComments>({});
 
   const fetchComments = useCallback(async (indicators: DashboardData['indicators']) => {
     try {
@@ -26,29 +27,11 @@ export default function Dashboard() {
         return;
       }
 
-      const { comments } = await commentsRes.json() as { comments: Record<string, string | undefined> };
+      const data = await commentsRes.json();
+      const comments: IndicatorComments = data?.comments ?? {};
 
-      // Update data with AI comments
-      setData((prevData) => {
-        if (!prevData) return null;
-
-        return {
-          ...prevData,
-          indicators: {
-            us10yYield: { ...prevData.indicators.us10yYield, aiComment: comments.US10Y },
-            dxy: { ...prevData.indicators.dxy, aiComment: comments.DXY },
-            highYieldSpread: { ...prevData.indicators.highYieldSpread, aiComment: comments.HYS },
-            m2MoneySupply: { ...prevData.indicators.m2MoneySupply, aiComment: comments.M2 },
-            cpi: { ...prevData.indicators.cpi, aiComment: comments.CPI },                          // NEW
-            payems: { ...prevData.indicators.payems, aiComment: comments.PAYEMS },                 // NEW
-            crudeOil: { ...prevData.indicators.crudeOil, aiComment: comments.OIL },
-            copperGoldRatio: { ...prevData.indicators.copperGoldRatio, aiComment: comments['Cu/Au'] },
-            pmi: { ...prevData.indicators.pmi, aiComment: comments.MFG },
-            putCallRatio: { ...prevData.indicators.putCallRatio, aiComment: comments.VIX },
-            bitcoin: { ...prevData.indicators.bitcoin, aiComment: comments.BTC },
-          },
-        };
-      });
+      // Update aiComments state separately (does not affect dashboardData reference)
+      setAiComments(comments);
     } catch (err) {
       console.error('Error fetching AI comments:', err);
     } finally {
@@ -185,21 +168,21 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {/* Macro Indicators (6 cards) - Rows 1-2 */}
-        <IndicatorCard indicator={data.indicators.us10yYield} isLoadingComments={isLoadingComments} index={0} />
-        <IndicatorCard indicator={data.indicators.dxy} isLoadingComments={isLoadingComments} index={1} />
-        <IndicatorCard indicator={data.indicators.highYieldSpread} isLoadingComments={isLoadingComments} index={2} />
-        <IndicatorCard indicator={data.indicators.m2MoneySupply} isLoadingComments={isLoadingComments} index={3} />
-        <IndicatorCard indicator={data.indicators.cpi} isLoadingComments={isLoadingComments} index={4} />
-        <IndicatorCard indicator={data.indicators.payems} isLoadingComments={isLoadingComments} index={5} />
+        <IndicatorCard indicator={data.indicators.us10yYield} aiComment={aiComments.US10Y} isLoadingComments={isLoadingComments} index={0} />
+        <IndicatorCard indicator={data.indicators.dxy} aiComment={aiComments.DXY} isLoadingComments={isLoadingComments} index={1} />
+        <IndicatorCard indicator={data.indicators.highYieldSpread} aiComment={aiComments.HYS} isLoadingComments={isLoadingComments} index={2} />
+        <IndicatorCard indicator={data.indicators.m2MoneySupply} aiComment={aiComments.M2} isLoadingComments={isLoadingComments} index={3} />
+        <IndicatorCard indicator={data.indicators.cpi} aiComment={aiComments.CPI} isLoadingComments={isLoadingComments} index={4} />
+        <IndicatorCard indicator={data.indicators.payems} aiComment={aiComments.PAYEMS} isLoadingComments={isLoadingComments} index={5} />
 
         {/* Commodity & Asset Indicators (3 cards) - Row 3 */}
-        <IndicatorCard indicator={data.indicators.crudeOil} isLoadingComments={isLoadingComments} index={6} />
-        <IndicatorCard indicator={data.indicators.copperGoldRatio} isLoadingComments={isLoadingComments} index={7} />
-        <IndicatorCard indicator={data.indicators.bitcoin} isLoadingComments={isLoadingComments} index={8} />
+        <IndicatorCard indicator={data.indicators.crudeOil} aiComment={aiComments.OIL} isLoadingComments={isLoadingComments} index={6} />
+        <IndicatorCard indicator={data.indicators.copperGoldRatio} aiComment={aiComments['Cu/Au']} isLoadingComments={isLoadingComments} index={7} />
+        <IndicatorCard indicator={data.indicators.bitcoin} aiComment={aiComments.BTC} isLoadingComments={isLoadingComments} index={8} />
 
         {/* Market Sentiment Indicators (2 cards) - Row 4 */}
-        <IndicatorCard indicator={data.indicators.pmi} isLoadingComments={isLoadingComments} index={9} />
-        <IndicatorCard indicator={data.indicators.putCallRatio} isLoadingComments={isLoadingComments} index={10} />
+        <IndicatorCard indicator={data.indicators.pmi} aiComment={aiComments.MFG} isLoadingComments={isLoadingComments} index={9} />
+        <IndicatorCard indicator={data.indicators.putCallRatio} aiComment={aiComments.VIX} isLoadingComments={isLoadingComments} index={10} />
       </div>
 
       <AIPrediction dashboardData={data} />

@@ -119,9 +119,9 @@ trade-dashboard/
 ### 캐싱 전략
 
 - **지표 데이터**: Next.js Data Cache 5분 (fetch revalidation)
-- **AI 분석**: Upstash Redis 24시간 캐싱 (모델별 독립)
+- **AI 분석**: Upstash Redis 25시간 캐싱 (모델별 독립)
 - **Fallback**: API 한도 초과 시 유사도 기반 캐시 자동 선택
 
 ---
 
-**최종 업데이트**: 2026-01-13
+**최종 업데이트**: 2026-01-22

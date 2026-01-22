@@ -3,11 +3,12 @@ import MiniChart from './MiniChart';
 
 interface IndicatorCardProps {
   indicator: IndicatorData;
+  aiComment?: string;
   isLoadingComments?: boolean;
   index?: number;
 }
 
-export default function IndicatorCard({ indicator, isLoadingComments = false, index = 0 }: IndicatorCardProps) {
+export default function IndicatorCard({ indicator, aiComment, isLoadingComments = false, index = 0 }: IndicatorCardProps) {
   const getChangeColor = (change: number) => {
     return change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
   };
@@ -141,7 +142,7 @@ export default function IndicatorCard({ indicator, isLoadingComments = false, in
             />
 
             {/* AI Comment - 차트 바로 아래에 배치 */}
-            {isLoadingComments && !indicator.aiComment ? (
+            {isLoadingComments && !aiComment ? (
               <div className="mt-3 p-3 bg-purple-50/80 dark:bg-purple-950/20 rounded-lg border border-purple-100/50 dark:border-purple-800/50 backdrop-blur-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold shrink-0">
@@ -158,14 +159,14 @@ export default function IndicatorCard({ indicator, isLoadingComments = false, in
                   </div>
                 </div>
               </div>
-            ) : indicator.aiComment ? (
+            ) : aiComment ? (
               <div className="mt-3 p-3 bg-purple-50/80 dark:bg-purple-950/20 rounded-lg border border-purple-100/50 dark:border-purple-800/50 backdrop-blur-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold shrink-0">
                     AI 분석
                   </span>
                   <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed">
-                    {indicator.aiComment}
+                    {aiComment}
                   </p>
                 </div>
               </div>

@@ -655,26 +655,26 @@ export async function getNFP(): Promise<IndicatorData> {
  * 2. For cache misses, generate ALL comments in single API call (batch)
  * 3. Store each comment in cache individually
  */
-export async function attachAIComments(indicators: {
+export async function generateAIComments(indicators: {
   us10yYield: IndicatorData;
   dxy: IndicatorData;
   highYieldSpread: IndicatorData;
   m2MoneySupply: IndicatorData;
-  cpi: IndicatorData;              // NEW
-  payems: IndicatorData;           // NEW
+  cpi: IndicatorData;
+  payems: IndicatorData;
   crudeOil: IndicatorData;
   copperGoldRatio: IndicatorData;
   pmi: IndicatorData;
   putCallRatio: IndicatorData;
   bitcoin: IndicatorData;
-}): Promise<void> {
+}): Promise<Record<string, string | undefined>> {
   const indicatorMap: Array<{ symbol: string; data: IndicatorData }> = [
     { symbol: 'US10Y', data: indicators.us10yYield },
     { symbol: 'DXY', data: indicators.dxy },
     { symbol: 'HYS', data: indicators.highYieldSpread },
     { symbol: 'M2', data: indicators.m2MoneySupply },
-    { symbol: 'CPI', data: indicators.cpi },         // NEW
-    { symbol: 'PAYEMS', data: indicators.payems },   // NEW
+    { symbol: 'CPI', data: indicators.cpi },
+    { symbol: 'PAYEMS', data: indicators.payems },
     { symbol: 'OIL', data: indicators.crudeOil },
     { symbol: 'Cu/Au', data: indicators.copperGoldRatio },
     { symbol: 'MFG', data: indicators.pmi },
@@ -682,7 +682,10 @@ export async function attachAIComments(indicators: {
     { symbol: 'BTC', data: indicators.bitcoin },
   ];
 
-  console.log('[attachAIComments] Starting batch AI comment generation for 11 indicators');
+  // Result object to collect all comments
+  const comments: Record<string, string | undefined> = {};
+
+  console.log('[generateAIComments] Starting batch AI comment generation for 11 indicators');
   const startTime = Date.now();
 
   // Step 1: Check cache for all indicators (parallel - fast)
@@ -699,50 +702,49 @@ export async function attachAIComments(indicators: {
 
   for (const { symbol, data, cached } of cacheResults) {
     if (cached) {
-      data.aiComment = cached;
+      comments[symbol] = cached;
       cacheHits.push({ symbol, data });
-      console.log(`[attachAIComments] Cache hit: ${symbol}`);
+      console.log(`[generateAIComments] Cache hit: ${symbol}`);
     } else {
       cacheMisses.push({ symbol, data });
     }
   }
 
-  console.log(`[attachAIComments] Cache hits: ${cacheHits.length}, misses: ${cacheMisses.length}`);
+  console.log(`[generateAIComments] Cache hits: ${cacheHits.length}, misses: ${cacheMisses.length}`);
 
   // Step 2: Generate comments for all cache misses in single batch call
   if (cacheMisses.length > 0) {
     try {
-      console.log(`[attachAIComments] Generating batch comments for ${cacheMisses.length} indicators...`);
+      console.log(`[generateAIComments] Generating batch comments for ${cacheMisses.length} indicators...`);
       const batchComments = await generateBatchComments(cacheMisses);
 
-      // Step 3: Attach comments and cache individually
+      // Step 3: Store comments and cache individually
       for (const { symbol, data } of cacheMisses) {
         const comment = batchComments[symbol];
         if (comment) {
-          data.aiComment = comment;
+          comments[symbol] = comment;
           await indicatorCommentCache.setComment(symbol, data, comment);
-          console.log(`[attachAIComments] Cached batch comment for ${symbol}`);
+          console.log(`[generateAIComments] Cached batch comment for ${symbol}`);
         } else {
-          console.warn(`[attachAIComments] No comment generated for ${symbol} (graceful degradation)`);
-          // Leave aiComment as undefined
+          console.warn(`[generateAIComments] No comment generated for ${symbol} (graceful degradation)`);
         }
       }
     } catch (error) {
-      console.error('[attachAIComments] Batch generation error:', error);
+      console.error('[generateAIComments] Batch generation error:', error);
 
       // Fallback: Try to get latest cached comments for each symbol
-      console.log('[attachAIComments] Attempting fallback to latest cached comments...');
-      for (const { symbol, data } of cacheMisses) {
+      console.log('[generateAIComments] Attempting fallback to latest cached comments...');
+      for (const { symbol } of cacheMisses) {
         try {
           const fallbackComment = await indicatorCommentCache.getLatestComment(symbol);
           if (fallbackComment) {
-            data.aiComment = fallbackComment;
-            console.log(`[attachAIComments] Using fallback comment for ${symbol}`);
+            comments[symbol] = fallbackComment;
+            console.log(`[generateAIComments] Using fallback comment for ${symbol}`);
           } else {
-            console.warn(`[attachAIComments] No fallback available for ${symbol}`);
+            console.warn(`[generateAIComments] No fallback available for ${symbol}`);
           }
         } catch (fallbackError) {
-          console.error(`[attachAIComments] Fallback error for ${symbol}:`, fallbackError);
+          console.error(`[generateAIComments] Fallback error for ${symbol}:`, fallbackError);
         }
       }
     }
@@ -750,8 +752,10 @@ export async function attachAIComments(indicators: {
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(
-    `[attachAIComments] Completed in ${duration}s: ${cacheHits.length} cache hits, ${cacheMisses.length} batch generated`
+    `[generateAIComments] Completed in ${duration}s: ${cacheHits.length} cache hits, ${cacheMisses.length} batch generated`
   );
+
+  return comments;
 }
 
 export async function getAllIndicators() {

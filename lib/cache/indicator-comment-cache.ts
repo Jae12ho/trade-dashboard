@@ -32,12 +32,12 @@ interface CachedComment {
  * - AI comments describe general trends, not exact values
  * - Value-based caching sufficient for meaningful insights
  *
- * TTL: 24 hours (86,400 seconds)
+ * TTL: 25 hours (90,000 seconds)
  * - Aligns with daily indicator update cycle
  * - Covers weekends (Friday data available through Saturday)
  */
 class IndicatorCommentCache {
-  private readonly TTL = 86400; // 24 hours in seconds
+  private readonly TTL = 90000; // 25 hours in seconds
 
   /**
    * Round indicator value based on symbol for cache key (5x more aggressive)
