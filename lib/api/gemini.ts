@@ -121,6 +121,10 @@ export async function generateMarketPrediction(
     bitcoin,
   } = dashboardData.indicators;
 
+  // Generate dynamic date for search queries
+  const now = new Date();
+  const monthYear = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   const prompt = `You are a professional financial market analyst. Provide a comprehensive market outlook by analyzing the following 11 economic indicators.
 
 === Economic Indicators ===
@@ -208,11 +212,11 @@ You have access to real-time web search capabilities. Use them strategically:
 - Search for "analyst buy sell rating stock market"
 
 **Search Query Examples:**
-- "Fed interest rate decision January 2026"
+- "Fed interest rate decision ${monthYear}"
 - "Trump tariff announcement this week"
 - "US CPI inflation data latest"
 - "FOMC statement recent"
-- "Wall Street analyst stock market forecast January 2026"
+- "Wall Street analyst stock market forecast ${monthYear}"
 - "Goldman Sachs S&P 500 target 2026"
 - "investment bank bullish bearish outlook"
 
@@ -341,6 +345,14 @@ CRITICAL:
 export async function generateBatchComments(
   indicators: Array<{ symbol: string; data: IndicatorData }>
 ): Promise<Record<string, string>> {
+  // Generate current date string for context
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
   // Build indicator descriptions for prompt
   const indicatorDescriptions = indicators.map(({ symbol, data }) => {
     const isMonthly = symbol === 'MFG' || symbol === 'M2' || symbol === 'CPI' || symbol === 'PAYEMS';
@@ -350,10 +362,18 @@ export async function generateBatchComments(
 
   const symbolList = indicators.map(({ symbol }) => symbol).join(', ');
 
-  const prompt = `You are a financial market analyst. Analyze the following ${indicators.length} economic indicators and provide a brief comment for EACH indicator (2-3 sentences in Korean).
+  const prompt = `You are a financial market analyst. Today is ${dateStr}.
+
+Analyze the following ${indicators.length} economic indicators and provide a brief comment for EACH indicator (2-3 sentences in Korean).
 
 **Indicators:**
 ${indicatorDescriptions}
+
+**Search Instructions:**
+- Use Google Search to find the ACTUAL cause of today's indicator movement
+- Search for news from the last 7 days only
+- Prioritize: Fed announcements, economic data releases, geopolitical events
+- If no specific news found, state "명확한 단일 원인 없이 기술적 조정"
 
 **Analysis Requirements:**
 For EACH indicator, provide a 2-3 sentence analysis in Korean following this structure:
@@ -404,6 +424,7 @@ Generate comments for these symbols: ${symbolList}`;
     const response = await genAI.interactions.create({
       model: 'gemini-2.5-flash-lite',
       input: prompt,
+      tools: [{ type: 'google_search' }],
       response_modalities: ['text'],
     });
 
