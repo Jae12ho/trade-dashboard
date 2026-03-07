@@ -96,8 +96,11 @@ IndicatorCard + MiniChart components
 /lib
   /types
     indicators.ts             # TypeScript interfaces (single source of truth)
+    errors.ts                 # Custom error types (QuotaError, isQuotaError, createQuotaError)
+  /constants
+    gemini-models.ts          # Gemini model names & DEFAULT_GEMINI_MODEL (single source of truth)
   /api
-    indicators.ts             # External API fetch functions + attachAIComments
+    indicators.ts             # External API fetch functions + generateAIComments
     gemini.ts                 # Google Gemini API integration (market + comments)
   /cache
     gemini-cache-redis.ts     # Market analysis cache (24h TTL)
@@ -218,7 +221,8 @@ To add a new indicator, follow this pattern:
 
 ### Google Gemini API
 - SDK: `@google/genai` (new unified SDK)
-- Model: `gemini-2.5-flash`
+- Model: configurable via `GeminiModelName` (default: `gemini-2.5-flash`; see `lib/constants/gemini-models.ts`)
+- Available models: `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-3-flash-preview`
 - **Google Search Integration**: AI automatically searches for official announcements (Fed, Trump, economic data)
 - Response language: Korean (specified in prompt)
 - Output format: JSON with `{ sentiment, reasoning, risks }`
@@ -230,10 +234,10 @@ To add a new indicator, follow this pattern:
 
 **Copper/Gold Ratio:**
 - Requires fetching both `HG=F` (Copper Futures) and `GC=F` (Gold Futures)
-- Formula: `(copper / gold) × 100`
+- Formula: `(copper / gold) × 10000`
 - Apply to both current/previous and historical data
 - Match historical dates when calculating ratio arrays
-- Display unit: `×100`
+- Display unit: `×10000`
 
 ## Caching Strategy
 
@@ -411,7 +415,7 @@ Page displays immediately
   ↓ fetch('/api/indicator-comments', POST) - background request
   ↓ POST body: { indicators: DashboardData['indicators'] }
 Server (indicator-comments/route.ts)
-  ↓ attachAIComments(indicators)
+  ↓ generateAIComments(indicators)
   ↓ Step 1: Check cache for all 11 indicators (parallel Redis reads)
   ↓ Step 2: Batch generate comments for cache misses (single Gemini API call)
   ↓ Step 3: Cache each comment individually
