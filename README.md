@@ -15,11 +15,11 @@
 - **데이터 다운로드**: 지표 데이터 JSON 파일 내보내기
 
 ### 🤖 AI 시장 분석
-- **Google Gemini 2.5 Flash**: 고도화된 프롬프트 엔지니어링 적용
-- **Google Search 통합**: Fed, 정부 공식 발표 자동 검색
-- **3-Tier 가중치 시스템**: 지표(70%) + 공식발표(25%) + 논평(5%)
-- **💬 지표별 AI 인사이트**: 각 지표의 변화 원인 및 예측 영향 분석 (1-2문장)
-- **모델 선택**: gemini-2.5-flash / gemini-2.5-flash-lite 중 선택
+- **Google Gemini 2.5 Flash**: 매크로 레짐 교차 분석 프롬프트 엔지니어링 적용
+- **Google Search 통합**: Fed, 정부 공식 발표, 지정학적 리스크 자동 검색
+- **3-Step 분석 프레임워크**: 매크로 레짐(60%) + 뉴스/정책(20%) + 지정학 리스크(20%)
+- **💬 지표별 AI 인사이트**: 각 지표의 변화 원인 및 예측 영향 분석 (2-3문장)
+- **모델 선택**: gemini-2.5-flash / gemini-2.5-flash-lite / gemini-3-flash-preview
 - **24시간 캐싱**: Upstash Redis 기반 영구 캐시 + Fallback 메커니즘
 
 ### 🎨 기타
@@ -97,7 +97,9 @@ trade-dashboard/
 ├── components/          # React 컴포넌트 (Dashboard, IndicatorCard, AIPrediction)
 ├── lib/
 │   ├── api/            # 외부 API 연동 (indicators.ts, gemini.ts)
+│   ├── prompts/        # AI 프롬프트 템플릿 (market-prediction, indicator-comments)
 │   ├── cache/          # Redis 캐싱 (gemini-cache-redis.ts)
+│   ├── constants/      # 설정 상수 (gemini-models.ts)
 │   └── types/          # TypeScript 타입 정의
 └── .env.local          # 환경 변수 (git 제외)
 ```
@@ -106,22 +108,29 @@ trade-dashboard/
 
 ### AI 프롬프트 엔지니어링
 
-**3-Tier 가중치 시스템**으로 분석 품질 향상:
-- **PRIMARY (70%)**: 9개 지표의 다기간 트렌드 분석
-- **SECONDARY (25%)**: Fed/정부 공식 발표 (Google Search 자동 검색)
-- **TERTIARY (5%)**: 애널리스트 의견
+**3-Step 매크로 레짐 분석 프레임워크**로 1-2주 단기 전망 최적화:
+- **STEP 1 — 매크로 레짐 교차 분석 (60%)**: 11개 지표를 4개 클러스터로 교차 판독
+  - 금융환경 (10Y+HYS+DXY) / 성장 모멘텀 (Cu/Gold+MFG+NFP)
+  - 인플레이션 궤적 (CPI+Oil+M2) / 리스크 선호도 (VIX+HYS+BTC)
+- **STEP 2 — 뉴스/정책 촉매 (20%)**: Fed, 경제지표 발표, 무역정책 (Google Search)
+- **STEP 3 — 지정학 리스크 (20%)**: 무역분쟁, 에너지 공급, 제재 등 확률×영향 평가
+
+**프롬프트 파일 분리 관리** (`lib/prompts/`):
+- `market-prediction.ts`: 시장 전망 프롬프트
+- `indicator-comments.ts`: 지표별 AI 코멘트 프롬프트
+- `utils.ts`: 공통 유틸리티 (기간별 변화율 포맷팅)
 
 **지표별 AI 인사이트**:
-- 각 지표의 변화 원인과 예측 영향을 1-2문장으로 설명
-- 단일 API 호출로 9개 지표 모두 분석 (추가 비용 없음)
+- 각 지표의 변화 원인과 예측 영향을 2-3문장으로 설명
+- 단일 API 호출로 11개 지표 배치 분석
 - 한국어로 제공, 차트 하단에 표시
 
 ### 캐싱 전략
 
 - **지표 데이터**: Next.js Data Cache 5분 (fetch revalidation)
-- **AI 분석**: Upstash Redis 25시간 캐싱 (모델별 독립)
+- **AI 분석**: Upstash Redis 24시간 캐싱 (모델별 독립)
 - **Fallback**: API 한도 초과 시 유사도 기반 캐시 자동 선택
 
 ---
 
-**최종 업데이트**: 2026-01-22
+**최종 업데이트**: 2026-03-08
