@@ -85,6 +85,7 @@ IndicatorCard + MiniChart components
       route.ts                # GET endpoint - returns Gemini market analysis
     /indicator-comments
       route.ts                # POST endpoint - returns AI comments for indicators
+    /news                     # placeholder, route.ts not implemented yet
 
 /components
   Dashboard.tsx               # Main client component (state, fetching, layout)
@@ -101,7 +102,11 @@ IndicatorCard + MiniChart components
     gemini-models.ts          # Gemini model names & DEFAULT_GEMINI_MODEL (single source of truth)
   /api
     indicators.ts             # External API fetch functions + generateAIComments
-    gemini.ts                 # Google Gemini API integration (market + comments)
+    gemini.ts                 # Gemini SDK calls; delegates prompt construction to /lib/prompts
+  /prompts
+    market-prediction.ts      # buildMarketPredictionPrompt() — 3-Step macro regime framework
+    indicator-comments.ts     # buildIndicatorCommentsPrompt() — per-indicator batch comments
+    utils.ts                  # formatPeriodChanges() — shared formatting helpers
   /cache
     gemini-cache-redis.ts     # Market analysis cache (24h TTL)
     indicator-comment-cache.ts # Individual indicator comment cache (24h TTL)
@@ -188,8 +193,8 @@ To add a new indicator, follow this pattern:
    - Add `<IndicatorCard indicator={data.indicators.newIndicator} />`
 
 7. **Update AI prompt** (if relevant):
-   - Edit `lib/api/gemini.ts`
-   - Add indicator to prompt template
+   - Edit `lib/prompts/market-prediction.ts` (market analysis) and/or `lib/prompts/indicator-comments.ts` (per-indicator comments)
+   - Do NOT edit `lib/api/gemini.ts` for prompt content — it only orchestrates SDK calls
 
 ## API Integration Notes
 
@@ -220,14 +225,20 @@ To add a new indicator, follow this pattern:
 - Calculate `previous` from `current / (1 + usd_24h_change / 100)`
 
 ### Google Gemini API
-- SDK: `@google/genai` (new unified SDK)
+- SDK: `@google/genai` (the legacy `@google/generative-ai` package was removed)
 - Model: configurable via `GeminiModelName` (default: `gemini-2.5-flash`; see `lib/constants/gemini-models.ts`)
-- Available models: `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-3-flash-preview`
+- Available models (all in Gemini API free tier as of 2026-05):
+  - `gemini-2.5-flash` (stable, default)
+  - `gemini-2.5-flash-lite` (stable, lighter)
+  - `gemini-3.1-flash-lite` (stable, Gemini 3 series)
+  - `gemini-3-flash-preview` (preview)
+- When adding/removing models, verify free-tier availability at https://ai.google.dev/gemini-api/docs/pricing — Pro variants (e.g. `gemini-2.5-pro`, `gemini-3.1-pro-preview`) are paid-only
 - **Google Search Integration**: AI automatically searches for official announcements (Fed, Trump, economic data)
 - Response language: Korean (specified in prompt)
-- Output format: JSON with `{ sentiment, reasoning, risks }`
-- Parse response: Extract JSON via regex `/{[\s\S]*}/`
-- Include all 11 indicators in formatted prompt
+- Output format: JSON with multi-horizon structure — `{ shortTerm, midTerm, longTerm, reasoning, counterNarrative, invalidationTriggers, risks }` plus top-level `sentiment/confidence/expectedSpxMove` for backward compat (mirrors shortTerm)
+- Each horizon object: `{ horizon, sentiment, confidence, expectedSpxMove, keyDrivers }`
+- Parse response: Extract JSON via regex `/{[\s\S]*}/`, then `parseHorizonView()` validates each horizon
+- Prompts live in `lib/prompts/` (see "Prompt Engineering" section), not inline in `gemini.ts`
 - Rate limits: 15 requests/min, 1,500 requests/day (free tier)
 
 ## Calculated Indicators
@@ -269,11 +280,17 @@ To add a new indicator, follow this pattern:
 
 - Fetches from `/api/ai-prediction` after Dashboard renders
 - Independent loading/error states (don't block indicator display)
-- Sentiment badge: 📈 bullish (green), 📉 bearish (red), ➡️ neutral (gray)
-- Reasoning: Multi-sentence analysis in Korean
-- Risks: Bulleted list of 3-4 key concerns
-- Manual refresh button available
-- Generated timestamp shown in footer
+- **3-Horizon card grid** (responsive: 1-col mobile, 3-col desktop):
+  - **단기 (1-2주)**: catalyst + 포지셔닝 + 기술적 우세, Hard Tripwire 적용
+  - **중기 (1-3개월)**: 매크로 레짐 클러스터 + Fed 경로 + 실적 사이클 우세
+  - **장기 (6-12개월)**: 구조적/세속적 추세 + 밸류에이션 + 부채 사이클 우세
+- Each card: sentiment badge (📈/📉/➡️), confidence bar (0-100%), expected SPX move range, top 5 keyDrivers
+- **Reasoning**: Multi-sentence analysis in Korean addressing all 3 horizons
+- **Counter-Narrative**: Boxed section showing strongest opposing case (only adjusts confidence, not direction)
+- **Invalidation Triggers**: Falsifiable conditions per horizon (orange flag icons)
+- **Risks**: Bulleted list of 3-4 key concerns (red warning icons)
+- Backward compat: if response lacks `midTerm`/`longTerm`, falls back to single inline sentiment layout
+- Manual refresh button + model selector (4 free-tier models) + generated timestamp shown in footer
 
 ## Common Tasks
 
@@ -403,6 +420,54 @@ UPSTASH_REDIS_REST_TOKEN=your-token
 - 256 MB storage
 - Sufficient for ~2,000-3,000 user requests/day
 
+## Prompt Engineering (lib/prompts/)
+
+All Gemini prompt templates live in `lib/prompts/`. `lib/api/gemini.ts` only normalizes inputs, calls these builders, and invokes the SDK.
+
+### Architecture: Multi-Layer 3-Horizon Framework
+
+각 horizon은 다른 분석 프레임이 우세 (동일 시장 상태도 horizon에 따라 sentiment 다를 수 있음):
+
+| Horizon | Dominant Frame | Hard Tripwire | STEP 2 ESCALATION |
+|---------|----------------|---------------|-------------------|
+| Short (1-2주) | Catalyst + positioning + technical | **applied (forced)** | **strongly applied** |
+| Mid (1-3개월) | Macro regime cluster + Fed path + earnings cycle | not applied | only on regime-shift signals |
+| Long (6-12개월) | Structural/secular trends + valuation + debt cycle | not applied | not applied |
+
+### `market-prediction.ts` — `buildMarketPredictionPrompt(dashboardData, monthYear)`
+
+Returns the prompt for `generateMarketPrediction`. Layered analysis:
+
+- **🚨 Hard Tripwire** (deterministic, evaluated in TypeScript via `evaluateHardTripwire()`): Fires when `VIX≥22 OR VIX 1D≥+15% OR HYS 1D≥+20bps`. Forces `shortTerm.sentiment ∈ {bearish, neutral}`, locks `confidence ≥ 0.55`. Counter-narrative cannot override. Mid/long horizons unaffected. Prevents the regression where multi-cluster confirmation requirements absorb single-day shocks.
+- **STEP 1 — Macro Regime Cross-Read** (mid PRIMARY, short auxiliary): 11 indicators in 4 clusters with **6-month percentile** + **streak (consecutive direction)** context, not absolute thresholds
+  - Financial Conditions (10Y + HYS + DXY)
+  - Growth Momentum (Cu/Gold + MFG + NFP)
+  - Inflation Trajectory (CPI + Oil + M2)
+  - Risk Appetite (VIX + HYS + BTC)
+- **STEP 1.5 — Counter-Narrative** (mandatory): Construct strongest opposing case. **Hard rule**: counter-narrative only adjusts confidence (≤0.65 if strong), never flips sentiment direction. Disabled when Hard Tripwire is engaged.
+- **STEP 2 — News & Policy Catalysts**: Real-time market reaction search FIRST (`"S&P 500 today market reaction"`, last 2 days). **ESCALATION rule**: if any of (a) data actual vs consensus ≥ 0.2pp, (b) Fed surprise, (c) 24h SPX ±1.5%, (d) immediate geopolitical price reaction → catalyst weight 20%→60%, **catalyst direction overrides STEP 1 if opposite**. Pricing-absorption is informational only, NOT a gate.
+- **STEP 3 — Geopolitical Risk Overlay**: probability × impact (medium×medium minimum to report)
+- **STEP 4 — Long-Term Structural Factors** (long PRIMARY): earnings cycle, valuation (CAPE/forward P/E/ERP), AI capex, US fiscal trajectory, demographics, r* equilibrium rate
+
+**Final synthesis priority** (highest first): Hard Tripwire > STEP 2 ESCALATED > STEP 1 macro > STEP 3 > STEP 1.5 (confidence-only).
+
+### `indicator-comments.ts` — `buildIndicatorCommentsPrompt(missing, dateStr)`
+
+Batch prompt for `generateBatchComments`. Only cache-missed indicators sent (dynamic size). **Mandatory rules**:
+- Cite economic data with **both actual AND consensus numbers** (e.g., "CPI 3.1% vs 컨센서스 3.0%"). If consensus unknown, omit that data point.
+- Date specificity required (e.g., "1월 7일 파월 발언")
+- **Strict fallback**: if no 7-day-recent citable fact found, use `"명확한 단일 catalyst 없이 기술적·수급 요인에 따른 조정으로 보입니다."` Fabrication is worse than fallback.
+
+### `utils.ts` — Shared helpers
+
+- `formatPeriodChanges(indicator, isMonthly)` — 1D/7D/30D or 1M/2M/3M change formatting
+- `calculatePercentile(value, history)`, `percentileLabel(p)` — 6-month relative position to replace absolute thresholds
+- `calculateStreak(history)`, `formatStreak(history, unit)` — consecutive up/down run-length (e.g., "3일 연속 상승")
+- `recentDateQualifier(daysBack)` — Google Search `after:YYYY-MM-DD` qualifier
+- `evaluateHardTripwire({vixValue, vix1dChangePct, hys1dChangeRaw}): TripwireResult` — deterministic risk-off evaluation injected into prompt as ENGAGED/DISARMED status block
+
+When adding a new indicator or analytical dimension, edit the appropriate prompt file rather than `gemini.ts`. When adding a new horizon or framework layer, follow the same pattern: keep deterministic logic in TypeScript, inject results as facts into the prompt.
+
 ## AI Comments for Individual Indicators
 
 **Architecture**: Separate from market analysis; provides 2-3 sentence explanations per indicator.
@@ -443,9 +508,10 @@ IndicatorCard displays "AI 분석" with wiggle animation → comment
   - MFG: 0.1 units
   - Change%: Integer units (1.23% → 1%)
 
-### Prompt Engineering (lib/api/gemini.ts - generateBatchComments)
+### Prompt Engineering (lib/prompts/indicator-comments.ts)
 **Model**: `gemini-2.5-flash-lite`
 **Language**: English prompts, Korean responses
+**Caller**: `generateBatchComments` in `lib/api/gemini.ts` invokes `buildIndicatorCommentsPrompt` — the prompt itself is not inline.
 
 **Critical Requirements**:
 1. **Direction & Cause**: Always state 전일 대비 상승/하락 with SPECIFIC evidence

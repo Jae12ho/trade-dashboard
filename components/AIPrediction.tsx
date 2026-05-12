@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { MarketPrediction } from '@/lib/api/gemini';
+import { MarketPrediction, HorizonView } from '@/lib/api/gemini';
 import { DashboardData } from '@/lib/types/indicators';
 import {
   GEMINI_MODELS,
@@ -221,21 +221,154 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
             </div>
           )}
 
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{getSentimentIcon(prediction.sentiment)}</span>
-            <div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-300 mb-1">
-                Market Sentiment
-              </p>
-              <span
-                className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${getSentimentColor(
-                  prediction.sentiment
-                )}`}
-              >
-                {prediction.sentiment}
-              </span>
+          {(() => {
+            // 3-horizon 카드 표시 여부: midTerm 또는 longTerm 중 하나라도 있으면 신규 형식
+            const hasHorizons = !!(prediction.midTerm || prediction.longTerm);
+
+            if (!hasHorizons) {
+              // 구 형식 (단일 horizon) — 기존 inline 레이아웃 유지
+              return (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-2xl">{getSentimentIcon(prediction.sentiment)}</span>
+                  <div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-300 mb-1">시장 sentiment</p>
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${getSentimentColor(prediction.sentiment)}`}>
+                      {prediction.sentiment}
+                    </span>
+                  </div>
+                  {typeof prediction.confidence === 'number' && (
+                    <div
+                      className="ml-2 cursor-help"
+                      title={`예측 신뢰도 ${Math.round(prediction.confidence * 100)}% — 모델이 본 전망에 대해 가지는 캘리브레이션된 확신도 (가능 범위 40–90%).`}
+                    >
+                      <p className="text-xs text-zinc-500 dark:text-zinc-300 mb-1">예측 신뢰도</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                          <div className="h-full bg-zinc-700 dark:bg-zinc-200 rounded-full transition-all" style={{ width: `${Math.round(prediction.confidence * 100)}%` }} />
+                        </div>
+                        <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 tabular-nums">
+                          {Math.round(prediction.confidence * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {prediction.expectedSpxMove && (
+                    <div
+                      className="ml-2 cursor-help"
+                      title="1–2주 동안 S&P 500의 예상 변동폭 range입니다 (정확한 예측이 아닌 시나리오 추정치)."
+                    >
+                      <p className="text-xs text-zinc-500 dark:text-zinc-300 mb-1">예상 SPX 변동 (1–2주)</p>
+                      <span className="inline-block px-3 py-1 rounded-full text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 tabular-nums">
+                        {prediction.expectedSpxMove}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // 신규 형식: 단기/중기/장기 3-horizon 카드 그리드
+            const shortTermView: HorizonView = {
+              horizon: '1-2주',
+              sentiment: prediction.sentiment,
+              confidence: prediction.confidence ?? 0.5,
+              expectedSpxMove: prediction.expectedSpxMove ?? '',
+              keyDrivers: [],
+            };
+
+            const horizons: Array<{ label: string; view: HorizonView | undefined }> = [
+              { label: '단기', view: shortTermView },
+              { label: '중기', view: prediction.midTerm },
+              { label: '장기', view: prediction.longTerm },
+            ];
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {horizons.map(({ label, view }) =>
+                  view ? (
+                    <div
+                      key={label}
+                      className="p-3 rounded-xl border border-zinc-200/50 dark:border-zinc-700/50 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm flex flex-col gap-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                            {label}
+                          </span>
+                          <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                            {view.horizon}
+                          </span>
+                        </div>
+                        <span className="text-lg leading-none">{getSentimentIcon(view.sentiment)}</span>
+                      </div>
+
+                      <div>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${getSentimentColor(view.sentiment)}`}>
+                          {view.sentiment}
+                        </span>
+                      </div>
+
+                      <div
+                        title={`예측 신뢰도 ${Math.round(view.confidence * 100)}% — 모델이 이 ${label}(${view.horizon}) 전망에 대해 가지는 캘리브레이션된 확신도입니다. 가능한 범위는 40–90%이며, 90%에 가까울수록 신호 합치가 강하고 반대 시나리오가 약함을 의미합니다.`}
+                        className="cursor-help"
+                      >
+                        <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 mb-0.5">
+                          <span>예측 신뢰도</span>
+                          <span className="font-semibold text-zinc-700 dark:text-zinc-200 tabular-nums">
+                            {Math.round(view.confidence * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-zinc-700 dark:bg-zinc-200 rounded-full transition-all"
+                            style={{ width: `${Math.round(view.confidence * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {view.expectedSpxMove && (
+                        <div
+                          className="text-xs text-zinc-600 dark:text-zinc-300 cursor-help"
+                          title={`${view.horizon} 동안 S&P 500 지수의 예상 변동폭 range입니다. 모델이 추정한 가격 움직임의 중심 범위로, 정확한 예측이 아닌 시나리오 추정치입니다.`}
+                        >
+                          <span className="text-zinc-400 dark:text-zinc-500">예상 SPX 변동: </span>
+                          <span className="font-semibold tabular-nums">{view.expectedSpxMove}</span>
+                        </div>
+                      )}
+
+                      {view.keyDrivers && view.keyDrivers.length > 0 && (
+                        <ul className="text-xs text-zinc-600 dark:text-zinc-300 space-y-0.5 mt-1">
+                          {view.keyDrivers.slice(0, 5).map((d, i) => (
+                            <li key={i} className="flex items-start gap-1.5">
+                              <span className="text-zinc-400 dark:text-zinc-500 mt-0.5">•</span>
+                              <span className="leading-snug">{d}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      key={label}
+                      className="p-3 rounded-xl border border-dashed border-zinc-200/50 dark:border-zinc-700/50 bg-zinc-50/30 dark:bg-zinc-900/20 flex items-center justify-center"
+                    >
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                        {label} 데이터 없음
+                      </span>
+                    </div>
+                  )
+                )}
+              </div>
+            );
+          })()}
+
+          {(prediction.midTerm || prediction.longTerm) && (
+            <div className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed -mt-2">
+              <span className="font-semibold">예측 신뢰도</span>: 각 horizon 전망에 대한 모델의 캘리브레이션된 확신도 (가능 범위 40–90%). Hard Tripwire 발동·신호 합치 강함 → 높음, 반대 시나리오 강함·신호 혼재 → 낮음.
+              <span className="mx-1">·</span>
+              <span className="font-semibold">예상 SPX 변동</span>: 해당 horizon 내 S&amp;P 500 예상 가격 변동폭 range (정확한 예측이 아닌 시나리오 추정치).
             </div>
-          </div>
+          )}
 
           <div>
             <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-2">
@@ -245,6 +378,39 @@ export default function AIPrediction({ dashboardData }: AIPredictionProps) {
               {prediction.reasoning}
             </p>
           </div>
+
+          {prediction.counterNarrative && (
+            <div className="p-3 bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-200/50 dark:border-zinc-700/50 rounded-lg backdrop-blur-sm">
+              <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wide">
+                Counter-Narrative · 반대 시나리오
+              </h3>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                {prediction.counterNarrative}
+              </p>
+            </div>
+          )}
+
+          {prediction.invalidationTriggers && prediction.invalidationTriggers.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-2">
+                Invalidation Triggers · 반증 조건
+              </h3>
+              <ul className="space-y-2">
+                {prediction.invalidationTriggers.map((trigger, index) => (
+                  <li
+                    key={index}
+                    className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300"
+                  >
+                    <span className="text-orange-500 mt-0.5">⚑</span>
+                    <span>{trigger}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1.5">
+                위 조건은 단기/중기/장기 전망별로 발효됩니다 — 해당 horizon 내 발생 시 그 전망 무효화.
+              </p>
+            </div>
+          )}
 
           {prediction.risks && prediction.risks.length > 0 && (
             <div>
